@@ -117,9 +117,9 @@ function UpdateSummary({ controller, snapshot, update }: Props & { update: Updat
         {update.publishedAt ? (
           <span
             className="text-muted-foreground"
-            title={formatDateTime(update.publishedAt, controller.dateLocale)}
+            title={formatDateTime(update.publishedAt, controller.dateLocale, controller.timeZone)}
           >
-            · {formatRelative(update.publishedAt, controller.dateLocale, snapshot.now)}
+            · {formatRelative(update.publishedAt, controller.locale, snapshot.now)}
           </span>
         ) : null}
         {update.preview ? <Badge variant="secondary">{controller.t("preview")}</Badge> : null}
@@ -244,7 +244,9 @@ function UpdatePanel(props: PanelProps) {
             {installsAt ? (
               <p className="text-muted-foreground text-sm">
                 {new Date(installsAt).getTime() > snapshot.now
-                  ? t("installsOn", { date: formatDateTime(installsAt, controller.dateLocale) })
+                  ? t("installsOn", {
+                      date: formatDateTime(installsAt, controller.dateLocale, controller.timeZone),
+                    })
                   : t("installsNextCheck")}
               </p>
             ) : null}
@@ -295,7 +297,7 @@ function UpdatePanel(props: PanelProps) {
               ? t("checking")
               : status.checkedAt
                 ? t("checked", {
-                    time: formatRelative(status.checkedAt, controller.dateLocale, snapshot.now),
+                    time: formatRelative(status.checkedAt, controller.locale, snapshot.now),
                   })
                 : t("notChecked")}
           </span>

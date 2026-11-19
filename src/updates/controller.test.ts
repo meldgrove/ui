@@ -336,6 +336,23 @@ describe("UpdatesController", () => {
     expect(controller.getSnapshot().stopped).toBe(true);
     expect(transport.count("status")).toBe(1);
     expect(onSignedOut).toHaveBeenCalledTimes(1);
+    expect(onSignedOut).toHaveBeenCalledWith("forbidden");
+    controller.dispose();
+  });
+
+  it("tells an ended session (401) from a lost admin role", async () => {
+    const onSignedOut = vi.fn();
+    const transport = fakeTransport({ status: () => ok({ error: "Sign in." }, 401) });
+    const controller = new UpdatesController({
+      transport,
+      appName: "Meldgrove Example",
+      project: "example",
+      storage,
+      onSignedOut,
+    });
+    controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onSignedOut).toHaveBeenCalledWith("signed-out");
     controller.dispose();
   });
 
@@ -377,6 +394,19 @@ describe("UpdatesController", () => {
     expect(english.dateLocale).toBe("en-GB");
     english.setLocale("de");
     expect(english.dateLocale).toBe("de-DE");
+  });
+
+  it("takes a date format and time zone that change while the page is open", () => {
+    const { controller } = setup(fakeTransport());
+    const listener = vi.fn();
+    controller.subscribe(listener);
+    controller.configure({ dateLocale: "de-DE", timeZone: "Europe/Berlin" });
+    expect(controller.dateLocale).toBe("de-DE");
+    expect(controller.timeZone).toBe("Europe/Berlin");
+    expect(listener).toHaveBeenCalledTimes(1);
+    controller.configure({ dateLocale: null, timeZone: null });
+    expect(controller.dateLocale).toBe("en-GB");
+    expect(controller.timeZone).toBeUndefined();
   });
 
   it("turns slow after 15 minutes and stops waiting for that installation by its identity", async () => {

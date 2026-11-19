@@ -83,6 +83,7 @@ function controllerFor(element: HTMLElement): UpdatesController {
       project: element.getAttribute("project") ?? "app",
       locale: localeOf(element),
       dateLocale: element.getAttribute("date-locale") ?? undefined,
+      timeZone: element.getAttribute("time-zone") ?? undefined,
       storage: element.getAttribute("storage-key")
         ? installStorage(element.getAttribute("storage-key")!)
         : undefined,

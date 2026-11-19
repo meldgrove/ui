@@ -7,11 +7,20 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["minute", 60_000],
 ];
 
-/** "19 Nov 2026, 14:05" in the locale (a BCP 47 tag, e.g. "en-GB") and the browser's time zone. */
-export function formatDateTime(value: string | number | Date, locale: string): string {
+/**
+ * "19 Nov 2026, 14:05" in the locale (a BCP 47 tag, e.g. "en-GB") and the
+ * time zone (IANA, e.g. "Europe/Berlin"; default: the browser's). An unknown
+ * time zone falls back to the browser's.
+ */
+export function formatDateTime(value: string | number | Date, locale: string, timeZone?: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date);
+  const options: Intl.DateTimeFormatOptions = { dateStyle: "medium", timeStyle: "short" };
+  try {
+    return new Intl.DateTimeFormat(locale, { ...options, timeZone }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat(locale, options).format(date);
+  }
 }
 
 /** "5 minutes ago", "in 2 days", "just now" (under a minute) relative to `now`. */

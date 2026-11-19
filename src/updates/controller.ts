@@ -61,16 +61,22 @@ export type UpdatesControllerOptions = {
   /** The Compose project of a server installation, for `journalctl -u meldgrove-updater-<project>`. */
   project: string;
   locale?: Locale;
-  /** The locale of dates; default "en-GB" for English (19 Nov 2026, 14:05), "de-DE" for German. */
+  /** The locale of full dates; default "en-GB" for English (19 Nov 2026, 14:05), "de-DE" for German. Relative times ("5 minutes ago") follow `locale`. */
   dateLocale?: string;
+  /** IANA time zone of dates, e.g. "Europe/Berlin"; default: the browser's. */
+  timeZone?: string;
   /** Where a tab keeps its followed installation; default: sessionStorage under `meldgrove.updates.<project>`. */
   storage?: InstallStorage;
   /** A status the page already has (rendered on the server); requests still start as usual. */
   initialResponse?: UpdatesResponse;
   /** Shows a message (toast). */
   notify?: (notice: Notice) => void;
-  /** Called once when a request finds the session ended (401, 403, 404, or a sign-in page). */
-  onSignedOut?: () => void;
+  /**
+   * Called once when the routes stop answering this page: "signed-out" for
+   * 401 or a sign-in page (the session ended), "forbidden" for 403 or 404
+   * (signed in, but no longer an app admin).
+   */
+  onSignedOut?: (reason: SignedOutReason) => void;
   /** Reloads the page once the new version answers. */
   reload?: () => void;
   /** The clock (epoch ms); for tests. */
@@ -137,11 +143,15 @@ function answerError(answer: UpdatesAnswer): string {
   return `Request failed (${answer.status})`;
 }
 
+/** Why the routes stopped answering the page; see `onSignedOut`. */
+export type SignedOutReason = "signed-out" | "forbidden";
+
 /**
  * The session ended or no longer allows this: 401, 403, or the 404 that the
  * routes answer everyone but app admins.
  */
 const isSignedOutStatus = (status: number) => status === 401 || status === 403 || status === 404;
+const signedOutReason = (status: number): SignedOutReason => (status === 401 ? "signed-out" : "forbidden");
 
 /**
  * The update button's behaviour for one page, free of React: asks the app's
@@ -157,15 +167,16 @@ export class UpdatesController {
   readonly project: string;
   locale: Locale;
   dateLocale: string;
+  timeZone: string | undefined;
   t: Translate<(typeof messages)["en"]>;
 
   private readonly transport: UpdatesTransport;
   private readonly storage: InstallStorage;
   private notifyFn: (notice: Notice) => void;
-  private onSignedOutFn: (() => void) | null;
+  private onSignedOutFn: ((reason: SignedOutReason) => void) | null;
   private readonly reloadFn: () => void;
   private readonly clock: () => number;
-  private readonly fixedDateLocale: string | null;
+  private fixedDateLocale: string | null;
   private pageStart: number;
   private restored = false;
   private readonly listeners = new Set<() => void>();
@@ -203,6 +214,7 @@ export class UpdatesController {
     this.locale = options.locale ?? "en";
     this.fixedDateLocale = options.dateLocale ?? null;
     this.dateLocale = this.fixedDateLocale ?? defaultDateLocale(this.locale);
+    this.timeZone = options.timeZone;
     this.t = translate(messages, this.locale);
     this.storage = options.storage ?? installStorage(`meldgrove.updates.${options.project}`);
     this.notifyFn = options.notify ?? (() => undefined);
@@ -284,14 +296,32 @@ export class UpdatesController {
   configure(options: {
     appName?: string;
     notify?: (notice: Notice) => void;
-    onSignedOut?: (() => void) | null;
+    onSignedOut?: ((reason: SignedOutReason) => void) | null;
+    /** null: the default of the locale. */
+    dateLocale?: string | null;
+    /** null: the browser's. */
+    timeZone?: string | null;
   }) {
     if (options.notify) this.notifyFn = options.notify;
     if (options.onSignedOut !== undefined) this.onSignedOutFn = options.onSignedOut;
+    let changed = false;
     if (options.appName && options.appName !== this.appName) {
       this.appName = options.appName;
-      this.emit();
+      changed = true;
     }
+    if (options.dateLocale !== undefined) {
+      this.fixedDateLocale = options.dateLocale;
+      const next = this.fixedDateLocale ?? defaultDateLocale(this.locale);
+      if (next !== this.dateLocale) {
+        this.dateLocale = next;
+        changed = true;
+      }
+    }
+    if (options.timeZone !== undefined && (options.timeZone ?? undefined) !== this.timeZone) {
+      this.timeZone = options.timeZone ?? undefined;
+      changed = true;
+    }
+    if (changed) this.emit();
   }
 
   /** Starts asking for the status; idempotent. Arms the deadline of a restored attempt first. */
@@ -403,15 +433,15 @@ export class UpdatesController {
     this.emit();
   }
 
-  /** 401, 403 or a sign-in page: no automatic request on this page any more; a followed installation stays stored. */
-  private signOut() {
+  /** 401, 403, 404 or a sign-in page: no automatic request on this page any more; a followed installation stays stored. */
+  private signOut(reason: SignedOutReason) {
     if (this.stopped) return;
     this.stopped = true;
     if (this.pollTimer !== null) clearTimeout(this.pollTimer);
     if (this.deadlineTimer !== null) clearTimeout(this.deadlineTimer);
     this.pollTimer = this.deadlineTimer = null;
     this.emit();
-    this.onSignedOutFn?.();
+    this.onSignedOutFn?.(reason);
   }
 
   // --- Requests -----------------------------------------------------------------------------
@@ -449,7 +479,7 @@ export class UpdatesController {
     try {
       const answer = await this.send("status", undefined, timeout, abort);
       if (abort.signal.aborted) return;
-      if (isSignedOutStatus(answer.status)) return this.signOut();
+      if (isSignedOutStatus(answer.status)) return this.signOut(signedOutReason(answer.status));
       const parsed = parseUpdatesResponse(answer.data);
       if (answer.status !== 200 || !parsed) throw new Error(answerError(answer));
       this.lastStatusAt = this.clock();
@@ -457,7 +487,7 @@ export class UpdatesController {
     } catch (error) {
       // Cancelled for an installation that just started: its own polls follow.
       if (abort.signal.aborted && this.statusAbort !== abort) return;
-      if (error instanceof SignedOutError) return this.signOut();
+      if (error instanceof SignedOutError) return this.signOut("signed-out");
       this.pollFailed(errorMessage(error));
     } finally {
       if (this.statusAbort === abort) {
@@ -526,10 +556,10 @@ export class UpdatesController {
     try {
       answer = await this.send(action, body, POST_TIMEOUT_MS);
     } catch (error) {
-      if (error instanceof SignedOutError) this.signOut();
+      if (error instanceof SignedOutError) this.signOut("signed-out");
       throw error;
     }
-    if (isSignedOutStatus(answer.status)) this.signOut();
+    if (isSignedOutStatus(answer.status)) this.signOut(signedOutReason(answer.status));
     const parsed = parseUpdatesResponse(answer.data);
     if (answer.status >= 200 && answer.status < 300 && parsed) {
       this.receive(parsed, sentAt);
@@ -624,14 +654,14 @@ export class UpdatesController {
     try {
       answer = await this.send("install", { version }, INSTALL_TIMEOUT_MS);
     } catch (error) {
-      if (error instanceof SignedOutError) this.signOut();
+      if (error instanceof SignedOutError) this.signOut("signed-out");
       return { answer: { kind: "unclear", error: errorMessage(error) }, response: null };
     }
     const parsed = parseUpdatesResponse(answer.data);
     const response = parsed?.updater ? parsed : null;
     if (answer.status === 202) return { answer: { kind: "accepted", response }, response };
     if (answer.status >= 400 && answer.status < 500) {
-      if (isSignedOutStatus(answer.status)) this.signOut();
+      if (isSignedOutStatus(answer.status)) this.signOut(signedOutReason(answer.status));
       return { answer: { kind: "refused", error: answerError(answer), response }, response };
     }
     return {

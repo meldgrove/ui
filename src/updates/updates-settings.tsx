@@ -122,7 +122,7 @@ export function UpdatesSettings() {
                 {snapshot.checking
                   ? t("checking")
                   : status.checkedAt
-                    ? formatRelative(status.checkedAt, controller.dateLocale, snapshot.now)
+                    ? formatRelative(status.checkedAt, controller.locale, snapshot.now)
                     : t("notChecked")}
               </span>
               <span className="text-muted-foreground">

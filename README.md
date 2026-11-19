@@ -122,16 +122,21 @@ import { UpdateButton, UpdatesProvider, UpdatesSettingsCard } from "@meldgrove/u
 - `project` names the updater's systemd unit in the hint after 15 minutes
   (`journalctl -u meldgrove-updater-<project>`).
 - 401, 403, 404 (what the routes answer non-admins) and sign-in pages end
-  the session for the page: no more automatic requests. `onSignedOut` lets
-  the app react (for example, show its sign-in page).
+  the session for the page: no more automatic requests. `onSignedOut(reason)`
+  lets the app react: `"signed-out"` (401 or a sign-in page; for example,
+  show the sign-in page) or `"forbidden"` (403 or 404; signed in, but no
+  longer an app admin).
 - An app with its own API helper passes `transport` instead of `url` (see
   `UpdatesTransport` in `@meldgrove/ui/updates`).
 - `initialResponse`: a status the server already has, so the settings show
-  at once. `dateLocale`: dates in another format (default `en-GB` for
-  English, `de-DE` for German).
+  at once.
+- `dateLocale`: full dates in another format, e.g. `de-DE` for 19.11.2026
+  (default `en-GB` for English, `de-DE` for German). Relative times ("2 hours
+  ago") follow `locale`, so an English page with German dates stays English.
+  `timeZone`: an IANA time zone such as `Europe/Berlin` (default: the
+  browser's).
 - Read once when the provider mounts: `project`, `url`, `transport`,
-  `storageKey`/`storage`, `dateLocale`, `initialResponse`. `appName`,
-  `guideUrl`, `locale`, `notify` and `onSignedOut` follow changes.
+  `storageKey`/`storage`, `initialResponse`. The others follow changes.
 - In Next.js, put the provider in a client component of the app when it gets
   functions (`transport`, `notify`, `onSignedOut`). The status is read from
   sessionStorage only after hydration, so server and client render the same.
@@ -174,7 +179,8 @@ admins:
 | `guide-url`                  | The deployment guide's section on automatic updates                                    |
 | `csrf-token`                 | Sent as `csrf-header` with every POST; without it, the cookie `csrf-cookie`            |
 | `csrf-cookie`, `csrf-header` | Default `csrftoken` and `X-CSRFToken` (Django)                                         |
-| `date-locale`                | Format of dates, e.g. `de-DE`; default `en-GB` for English                             |
+| `date-locale`                | Format of full dates, e.g. `de-DE`; default `en-GB` for English                        |
+| `time-zone`                  | IANA time zone of dates, e.g. `Europe/Berlin`; default the browser's                   |
 | `storage-key`                | sessionStorage prefix; default `meldgrove.updates.<project>`                           |
 | `plain`                      | On the settings: no card of their own, for a section of the app                        |
 

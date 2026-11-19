@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { useLocale, type Locale } from "../lib/i18n.tsx";
-import { UpdatesController, type Notice, type UpdatesSnapshot } from "./controller.ts";
+import { UpdatesController, type Notice, type SignedOutReason, type UpdatesSnapshot } from "./controller.ts";
 import { toastNotice } from "./notice.ts";
 import { installStorage, type InstallStorage } from "./state.ts";
 import { fetchTransport, type UpdatesTransport } from "./transport.ts";
@@ -22,8 +22,7 @@ const UpdatesContext = createContext<UpdatesContextValue | null>(null);
 
 /**
  * Read once when the provider mounts: `project`, `url`, `transport`,
- * `storageKey`, `storage`, `dateLocale`, `initialResponse`. The others follow
- * changes. In Next.js, functions (`transport`, `notify`, `onSignedOut`) need
+ * `storageKey`, `storage`, `initialResponse`. The others follow changes. In Next.js, functions (`transport`, `notify`, `onSignedOut`) need
  * the provider in a client component of the app.
  */
 export type UpdatesProviderProps = {
@@ -39,8 +38,10 @@ export type UpdatesProviderProps = {
   guideUrl?: string;
   /** Default: the locale of `UIProvider`. */
   locale?: Locale;
-  /** Locale of dates, e.g. "de-DE"; default "en-GB" for English, "de-DE" for German. */
+  /** Locale of full dates, e.g. "de-DE" for 19.11.2026; default "en-GB" for English, "de-DE" for German. Relative times follow `locale`. */
   dateLocale?: string;
+  /** IANA time zone of dates, e.g. "Europe/Berlin"; default: the browser's. */
+  timeZone?: string;
   /** sessionStorage prefix; default `meldgrove.updates.<project>`. */
   storageKey?: string;
   /** Where a tab keeps its followed installation, in place of `storageKey`. */
@@ -49,8 +50,8 @@ export type UpdatesProviderProps = {
   initialResponse?: UpdatesResponse;
   /** Default: a toast (mount `Toaster` from `@meldgrove/ui/sonner`). */
   notify?: (notice: Notice) => void;
-  /** Called once when a request finds the session ended (401, 403, 404 or a sign-in page). */
-  onSignedOut?: () => void;
+  /** Called once when the routes stop answering: "signed-out" (401, sign-in page) or "forbidden" (403, 404). */
+  onSignedOut?: (reason: SignedOutReason) => void;
   children: ReactNode;
 };
 
@@ -71,6 +72,7 @@ export function UpdatesProvider(props: UpdatesProviderProps) {
       project: props.project,
       locale,
       dateLocale: props.dateLocale,
+      timeZone: props.timeZone,
       storage: props.storage ?? (props.storageKey ? installStorage(props.storageKey) : undefined),
       initialResponse: props.initialResponse,
       notify: props.notify ?? toastNotice,
@@ -87,8 +89,10 @@ export function UpdatesProvider(props: UpdatesProviderProps) {
       appName: props.appName,
       notify: props.notify ?? toastNotice,
       onSignedOut: props.onSignedOut ?? null,
+      dateLocale: props.dateLocale ?? null,
+      timeZone: props.timeZone ?? null,
     });
-  }, [controller, props.appName, props.notify, props.onSignedOut]);
+  }, [controller, props.appName, props.notify, props.onSignedOut, props.dateLocale, props.timeZone]);
   return (
     <UpdatesContextProvider controller={controller} guideUrl={props.guideUrl ?? null}>
       {props.children}

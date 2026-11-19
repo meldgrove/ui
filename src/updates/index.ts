@@ -20,6 +20,7 @@ export {
   UpdatesController,
   runningVersion,
   type Notice,
+  type SignedOutReason,
   type UpdatesControllerOptions,
   type UpdatesSnapshot,
 } from "./controller.ts";
