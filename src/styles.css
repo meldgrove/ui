@@ -1,0 +1,11 @@
+/*
+ * The Meldgrove theme for Tailwind CSS 4, with the package's components as a
+ * source of class names. In the app's stylesheet, after Tailwind:
+ *
+ *   @import "tailwindcss";
+ *   @import "@meldgrove/ui/styles.css";
+ */
+@import "./theme.css";
+
+@source "./components";
+@source "./updates";

@@ -1,0 +1,162 @@
+# Maintainers start a release in Actions > Release > Run workflow (CONTRIBUTING.md,
+# Releases). It refuses unless started from main, CI passed for the commit and
+# something changed since the last release; raises the latest vX.Y.Z tag by the
+# chosen part (a pull request labelled `breaking` needs a new series); publishes
+# the package to npm with provenance; then pushes only the tag and creates the
+# GitHub Release. package.json stays at 0.0.0. A dry run publishes nothing.
+#
+# npm: trusted publishing (OIDC) from this workflow. The secret NPM_TOKEN is only
+# for a first publish before the trusted publisher exists; delete it afterwards.
+# Only GitHub-owned actions pinned by commit SHA; npm runs through its command line.
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version part to raise (the first release starts from 0.0.0)
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      dry_run:
+        description: "Dry run: build, show the version and notes, publish nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "26.13.0"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read # find the CI run of the commit
+      contents: write # push the tag, create the GitHub Release
+      pull-requests: read # read the labels of the merged pull requests
+      id-token: write # npm trusted publishing and provenance
+    steps:
+      - name: Require main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Start releases from main, not ${GITHUB_REF_NAME}."
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # every tag
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+          passed=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&status=success" --jq .total_count)
+          [ "$passed" != 0 ] || fail "CI has not passed for $GITHUB_SHA. Wait for CI on main to finish, then start the release again."
+
+          previous=$(git tag --list 'v[0-9]*' --sort=-version:refname | awk '/^v[0-9]+\.[0-9]+\.[0-9]+$/ && !found { print; found = 1 }')
+          if [ -n "$previous" ]; then
+            [ "$(git rev-parse "$previous^{commit}")" != "$(git rev-parse HEAD)" ] || fail "Nothing to release: main has no changes since $previous."
+          fi
+          current=${previous#v}
+          IFS=. read -r major minor patch <<< "${current:-0.0.0}"
+          case "$BUMP" in
+            major) next="$((major + 1)).0.0" ;;
+            minor) next="$major.$((minor + 1)).0" ;;
+            patch) next="$major.$minor.$((patch + 1))" ;;
+            *) fail "bump must be patch, minor or major, not '$BUMP'." ;;
+          esac
+          tag="v$next"
+          ! git rev-parse --quiet --verify "refs/tags/$tag" > /dev/null || fail "The tag $tag exists already."
+
+          notes_from=(-f "tag_name=$tag" -f "target_commitish=$GITHUB_SHA")
+          if [ -n "$previous" ]; then
+            notes_from+=(-f "previous_tag_name=$previous")
+          fi
+          notes=$(gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" "${notes_from[@]}" --jq .body)
+
+          # Apps must change code for a pull request labelled `breaking`: a new
+          # series (a minor version below 1.0.0, a major version from 1.0.0), so
+          # that the version says it.
+          breaking=""
+          for number in $(grep -oE '/pull/[0-9]+' <<< "$notes" | grep -oE '[0-9]+' | sort -un || true); do
+            labels=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$number" --jq '.labels[].name') || fail "Could not read the labels of pull request #$number."
+            if grep -qx breaking <<< "$labels"; then
+              breaking="$breaking #$number"
+            fi
+          done
+          if [ -n "$breaking" ]; then
+            if [ "$major" = 0 ]; then series=minor; else series=major; fi
+            case "$series:$BUMP" in
+              minor:patch | major:patch | major:minor)
+                fail "Apps must change code for$breaking (label breaking), so this release starts a new series: choose $series." ;;
+            esac
+          fi
+
+          {
+            echo "## @meldgrove/ui $next"
+            echo
+            echo "$notes"
+          } >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "version=$next"
+            echo "tag=$tag"
+            echo "previous=$previous"
+          } >> "$GITHUB_OUTPUT"
+
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: npm run build
+      - run: npm run pack:check
+
+      - name: Set the version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: npm version "$VERSION" --no-git-tag-version
+
+      - name: Publish to npm
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          # Empty once trusted publishing is set up: npm then uses OIDC.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ "$DRY_RUN" = true ]; then
+            npm publish --access public --dry-run
+          else
+            npm publish --access public --provenance
+          fi
+
+      - name: Tag and GitHub Release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          PREVIOUS: ${{ steps.version.outputs.previous }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag --annotate "$TAG" --message "$TAG"
+          git push origin "$TAG"
+          args=(--title "$TAG" --generate-notes --verify-tag)
+          if [ -n "$PREVIOUS" ]; then args+=(--notes-start-tag "$PREVIOUS"); fi
+          gh release create "$TAG" "${args[@]}"
+          echo "Published https://www.npmjs.com/package/@meldgrove/ui/v/${TAG#v}" >> "$GITHUB_STEP_SUMMARY"
