@@ -12,13 +12,20 @@ import {
 import { useLocale, type Locale } from "../lib/i18n.tsx";
 import { UpdatesController, type Notice, type UpdatesSnapshot } from "./controller.ts";
 import { toastNotice } from "./notice.ts";
-import { installStorage } from "./state.ts";
+import { installStorage, type InstallStorage } from "./state.ts";
 import { fetchTransport, type UpdatesTransport } from "./transport.ts";
+import type { UpdatesResponse } from "./types.ts";
 
 type UpdatesContextValue = { controller: UpdatesController; guideUrl: string | null };
 
 const UpdatesContext = createContext<UpdatesContextValue | null>(null);
 
+/**
+ * Read once when the provider mounts: `project`, `url`, `transport`,
+ * `storageKey`, `storage`, `dateLocale`, `initialResponse`. The others follow
+ * changes. In Next.js, functions (`transport`, `notify`, `onSignedOut`) need
+ * the provider in a client component of the app.
+ */
 export type UpdatesProviderProps = {
   /** The app's name in texts, e.g. "Meldgrove Handbook". */
   appName: string;
@@ -32,10 +39,18 @@ export type UpdatesProviderProps = {
   guideUrl?: string;
   /** Default: the locale of `UIProvider`. */
   locale?: Locale;
+  /** Locale of dates, e.g. "de-DE"; default "en-GB" for English, "de-DE" for German. */
+  dateLocale?: string;
   /** sessionStorage prefix; default `meldgrove.updates.<project>`. */
   storageKey?: string;
+  /** Where a tab keeps its followed installation, in place of `storageKey`. */
+  storage?: InstallStorage;
+  /** A status the server already has, shown before the browser's first request. */
+  initialResponse?: UpdatesResponse;
   /** Default: a toast (mount `Toaster` from `@meldgrove/ui/sonner`). */
   notify?: (notice: Notice) => void;
+  /** Called once when a request finds the session ended (401, 403, 404 or a sign-in page). */
+  onSignedOut?: () => void;
   children: ReactNode;
 };
 
@@ -55,8 +70,11 @@ export function UpdatesProvider(props: UpdatesProviderProps) {
       appName: props.appName,
       project: props.project,
       locale,
-      storage: props.storageKey ? installStorage(props.storageKey) : undefined,
-      notify: (notice) => (props.notify ?? toastNotice)(notice),
+      dateLocale: props.dateLocale,
+      storage: props.storage ?? (props.storageKey ? installStorage(props.storageKey) : undefined),
+      initialResponse: props.initialResponse,
+      notify: props.notify ?? toastNotice,
+      onSignedOut: props.onSignedOut,
     });
   });
   useEffect(() => {
@@ -64,6 +82,13 @@ export function UpdatesProvider(props: UpdatesProviderProps) {
     return () => controller.dispose();
   }, [controller]);
   useEffect(() => controller.setLocale(locale), [controller, locale]);
+  useEffect(() => {
+    controller.configure({
+      appName: props.appName,
+      notify: props.notify ?? toastNotice,
+      onSignedOut: props.onSignedOut ?? null,
+    });
+  }, [controller, props.appName, props.notify, props.onSignedOut]);
   return (
     <UpdatesContextProvider controller={controller} guideUrl={props.guideUrl ?? null}>
       {props.children}
@@ -101,5 +126,5 @@ export function useGuideUrl(): string | null {
 /** The current snapshot of the page's update status; re-renders when it changes. */
 export function useUpdatesSnapshot(): UpdatesSnapshot {
   const controller = useUpdatesController();
-  return useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
+  return useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getServerSnapshot);
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useId, useState } from "react";
-import { toast } from "sonner";
 import { Alert, AlertDescription } from "../components/alert.tsx";
 import { Badge } from "../components/badge.tsx";
 import { Button } from "../components/button.tsx";
@@ -19,7 +18,9 @@ import { Spinner } from "../components/spinner.tsx";
 import { LoadingState } from "../components/states.tsx";
 import { errorMessage, type Translate } from "../lib/i18n.tsx";
 import type { messages } from "./messages.ts";
-import { useUpdatesController, useUpdatesSnapshot } from "./react.tsx";
+import type { UpdatesController } from "./controller.ts";
+import { useGuideUrl, useUpdatesController, useUpdatesSnapshot } from "./react.tsx";
+import { formatRelative } from "../lib/format.ts";
 import { cooldownParts, windowParts } from "./state.ts";
 import type { UpdateChannel, UpdaterStatus } from "./types.ts";
 
@@ -51,18 +52,23 @@ export function automaticText(t: T, status: UpdaterStatus): string {
 export function UpdatesSettings() {
   const controller = useUpdatesController();
   const snapshot = useUpdatesSnapshot();
+  const guideUrl = useGuideUrl();
   const t = controller.t;
   const id = useId();
   const [choice, setChoice] = useState<UpdateChannel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { response, status } = snapshot;
-  const current = status?.channel ?? "stable";
-  const selected = choice ?? current;
+  const current = status?.channel ?? null;
+  // Without a status, no channel is shown as chosen.
+  const selected = choice ?? current ?? "";
   const locked = status?.channelLocked ?? null;
   const disabled = !status || locked !== null || snapshot.savingChannel;
   const cooldown = cooldownText(t, status?.cooldown ?? null);
 
-  if (!response) return <LoadingState />;
+  if (!response) {
+    if (snapshot.stopped) return <p className="text-muted-foreground text-sm">{t("signedOut")}</p>;
+    return <LoadingState />;
+  }
 
   const submit = async () => {
     if (!choice || choice === current) return;
@@ -74,7 +80,7 @@ export function UpdatesSettings() {
       if (!latest?.reachable || !latest.updater) return setError(latest?.error ?? t("unreachable"));
       if (!saved) return setError(t("channelNotSaved"));
       setChoice(null);
-      toast.success(t("channelSaved"));
+      controller.notify({ kind: "success", title: t("channelSaved") });
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -110,6 +116,34 @@ export function UpdatesSettings() {
             <dd className="font-medium">{t(status.channel)}</dd>
             <dt className="text-muted-foreground">{t("automatic")}</dt>
             <dd>{automaticText(t, status)}</dd>
+            <dt className="text-muted-foreground">{t("lastCheck")}</dt>
+            <dd className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span aria-live="polite">
+                {snapshot.checking
+                  ? t("checking")
+                  : status.checkedAt
+                    ? formatRelative(status.checkedAt, controller.dateLocale, snapshot.now)
+                    : t("notChecked")}
+              </span>
+              <span className="text-muted-foreground">
+                · {t("updaterVersion", { version: status.updater })}
+              </span>
+              {!snapshot.checking ? (
+                <Button
+                  variant="link"
+                  size="xs"
+                  className="h-auto p-0"
+                  onClick={() => void controller.check()}
+                >
+                  {t("checkNow")}
+                </Button>
+              ) : null}
+            </dd>
+            {status.error ? (
+              <dd className="text-destructive break-words sm:col-start-2">
+                {t("checkFailed", { error: status.error })}
+              </dd>
+            ) : null}
           </>
         ) : null}
       </dl>
@@ -117,8 +151,10 @@ export function UpdatesSettings() {
       {!response.reachable || !status ? (
         <Alert>
           <AlertDescription>
-            <p>{t("sectionUnreachable")}</p>
-            {response.error ? <p className="text-muted-foreground break-words">{response.error}</p> : null}
+            <p className="break-words">{response.error ?? t("sectionUnreachable")}</p>
+            <p>
+              <GuideText controller={controller} guideUrl={guideUrl} />
+            </p>
           </AlertDescription>
         </Alert>
       ) : null}
@@ -163,13 +199,38 @@ export function UpdatesSettings() {
   );
 }
 
-/** `UpdatesSettings` in a card with the title "Updates". */
+/** "Automatic updates need the updater service from compose.yaml (deployment guide)", with the link. */
+function GuideText({ controller, guideUrl }: { controller: UpdatesController; guideUrl: string | null }) {
+  const [before, after] = controller.t("sectionUnreachableHelp").split("{guide}");
+  return (
+    <>
+      {before}
+      {guideUrl ? (
+        <a
+          href={guideUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-primary font-medium underline-offset-4 hover:underline"
+        >
+          {controller.t("deploymentGuide")}
+        </a>
+      ) : (
+        controller.t("deploymentGuide")
+      )}
+      {after}
+    </>
+  );
+}
+
+/** `UpdatesSettings` in a card with the heading "Updates". */
 export function UpdatesSettingsCard({ className }: { className?: string }) {
   const controller = useUpdatesController();
   return (
     <Card className={className}>
       <CardHeader>
-        <CardTitle>{controller.t("updates")}</CardTitle>
+        <CardTitle role="heading" aria-level={2}>
+          {controller.t("updates")}
+        </CardTitle>
         <CardDescription>{controller.t("sectionText", { app: controller.appName })}</CardDescription>
       </CardHeader>
       <CardContent>

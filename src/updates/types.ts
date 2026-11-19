@@ -100,9 +100,11 @@ const isUpdate = object({
   failed: nullable(isString),
 });
 
+// Values a newer updater may add (a mode, a stage, a result) keep the answer valid: the
+// views show what they know and ignore the rest.
 const isStatus = object({
   updater: isString,
-  mode: oneOf("host", "platform", "off"),
+  mode: isString,
   channel: oneOf(...UPDATE_CHANNELS),
   channelLocked: nullable(isString),
   installed: nullable(isString),
@@ -113,13 +115,13 @@ const isStatus = object({
       version: isString,
       startedAt: isString,
       manual: isBoolean,
-      stage: oneOf("requested", "pulling", "starting", "rolling-back", "deploying"),
+      stage: isString,
     }),
   ),
   last: nullable(
     object({
       version: isString,
-      result: oneOf("installed", "failed", "rolled-back", "accepted"),
+      result: isString,
       message: nullable(isString),
       finishedAt: isString,
     }),

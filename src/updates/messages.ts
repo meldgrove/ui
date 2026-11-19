@@ -1,4 +1,4 @@
-import { defineMessages } from "../lib/i18n.tsx";
+import { defineMessages } from "../lib/i18n-core.ts";
 
 /**
  * The update button and the "Updates" settings, in English and German
@@ -14,6 +14,8 @@ export const messages = defineMessages({
     upToDateVersion: "Up to date · {version}",
     available: "Update available",
     releaseNotes: "Release notes",
+    changes: "Changes",
+    opensInNewTab: "(opens in a new tab)",
     moreChanges: "and {n} more changes",
     moreChanges_one: "and 1 more change",
     installNow: "Install now",
@@ -83,8 +85,11 @@ export const messages = defineMessages({
       "On: updates install automatically at the next check, between {start} and {end} ({timezone}).",
     autoOff: "Off on this server: nothing installs automatically.",
     autoPlatform: "The platform installs them (deploy link).",
-    sectionUnreachable:
-      "The update service is not reachable. Automatic updates need the updater service from compose.yaml (deployment guide).",
+    sectionUnreachable: "The update service is not reachable.",
+    sectionUnreachableHelp: "Automatic updates need the updater service from compose.yaml ({guide}).",
+    lastCheck: "Last check",
+    updaterVersion: "Updater {version}",
+    signedOut: "Sign in again as an admin to manage updates.",
     days: "{count} days",
     days_one: "1 day",
     hours: "{count} hours",
@@ -102,6 +107,8 @@ export const messages = defineMessages({
     upToDateVersion: "Aktuell · {version}",
     available: "Update verfügbar",
     releaseNotes: "Versionshinweise",
+    changes: "Änderungen",
+    opensInNewTab: "(öffnet in neuem Tab)",
     moreChanges: "und {n} weitere Änderungen",
     moreChanges_one: "und 1 weitere Änderung",
     installNow: "Jetzt installieren",
@@ -174,8 +181,11 @@ export const messages = defineMessages({
       "An: Updates werden bei der nächsten Prüfung automatisch installiert, zwischen {start} und {end} ({timezone}).",
     autoOff: "Aus auf diesem Server: Nichts wird automatisch installiert.",
     autoPlatform: "Die Plattform installiert sie (Deploy-Link).",
-    sectionUnreachable:
-      "Der Update-Dienst ist nicht erreichbar. Automatische Updates brauchen den Dienst updater aus compose.yaml (Anleitung zum Deployment).",
+    sectionUnreachable: "Der Update-Dienst ist nicht erreichbar.",
+    sectionUnreachableHelp: "Automatische Updates brauchen den Dienst updater aus compose.yaml ({guide}).",
+    lastCheck: "Letzte Prüfung",
+    updaterVersion: "Updater {version}",
+    signedOut: "Melde dich erneut als Admin an, um Updates zu verwalten.",
     // Dative after "nach": "nach 3 Tagen".
     days: "{count} Tagen",
     days_one: "1 Tag",

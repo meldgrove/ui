@@ -309,6 +309,76 @@ describe("UpdatesController", () => {
     second.dispose();
   });
 
+  it("reads a followed installation only on start, so a server render matches hydration", async () => {
+    storage.savePending({ ...startAttempt("0.2.1", undefined, T0 - 1_000), confirmed: true });
+    const transport = fakeTransport({ status: () => ok(response(status())) });
+    const { controller } = setup(transport);
+    expect(controller.getSnapshot().pending).toBeNull();
+    expect(controller.getServerSnapshot().pending).toBeNull();
+    controller.start();
+    expect(controller.getSnapshot().pending).toMatchObject({ version: "0.2.1" });
+    expect(controller.getServerSnapshot().pending).toBeNull();
+    controller.dispose();
+  });
+
+  it("takes the 404 that non-admins get as the end of the session, and says so once", async () => {
+    const onSignedOut = vi.fn();
+    const transport = fakeTransport({ status: () => ok({ error: "Not found." }, 404) });
+    const controller = new UpdatesController({
+      transport,
+      appName: "Meldgrove Example",
+      project: "example",
+      storage,
+      onSignedOut,
+    });
+    controller.start();
+    await vi.advanceTimersByTimeAsync(NORMAL_INTERVAL_MS * 2);
+    expect(controller.getSnapshot().stopped).toBe(true);
+    expect(transport.count("status")).toBe(1);
+    expect(onSignedOut).toHaveBeenCalledTimes(1);
+    controller.dispose();
+  });
+
+  it("drops a status request in flight when an installation starts, and polls at once after", async () => {
+    let current = response(status({ available: release("0.2.1") }));
+    const transport = fakeTransport({ status: () => ok(current), install: () => ok(current, 202) });
+    const { controller } = setup(transport);
+    controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    // The next status request hangs.
+    transport.on(
+      "status",
+      (request) =>
+        new Promise((_, reject) =>
+          request.signal?.addEventListener("abort", () => reject(new Error("aborted"))),
+        ),
+    );
+    window.dispatchEvent(new Event("online"));
+    await vi.advanceTimersByTimeAsync(61_000);
+    window.dispatchEvent(new Event("focus"));
+    await vi.advanceTimersByTimeAsync(0);
+    const before = transport.count("status");
+    current = response(
+      status({
+        installing: { version: "0.2.1", startedAt: iso(T0 + 61_000), manual: true, stage: "pulling" },
+      }),
+    );
+    transport.on("status", () => ok(current));
+    await controller.install(release("0.2.1"));
+    await vi.advanceTimersByTimeAsync(INSTALL_INTERVAL_MS);
+    expect(transport.count("status")).toBe(before + 1);
+    expect(controller.getSnapshot().pending).toMatchObject({ confirmed: true });
+    controller.dispose();
+  });
+
+  it("formats dates the way the apps' people read them", () => {
+    const transport = fakeTransport();
+    const english = setup(transport).controller;
+    expect(english.dateLocale).toBe("en-GB");
+    english.setLocale("de");
+    expect(english.dateLocale).toBe("de-DE");
+  });
+
   it("turns slow after 15 minutes and stops waiting for that installation by its identity", async () => {
     const running = { version: "0.2.1", startedAt: iso(T0), manual: false, stage: "pulling" as const };
     const transport = fakeTransport({ status: () => ok(response(status({ installing: running }))) });

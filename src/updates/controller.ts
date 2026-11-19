@@ -1,4 +1,4 @@
-import { errorMessage, translate, type Locale, type Translate } from "../lib/i18n.tsx";
+import { errorMessage, translate, type Locale, type Translate } from "../lib/i18n-core.ts";
 import { messages } from "./messages.ts";
 import {
   answerInstall,
@@ -61,10 +61,16 @@ export type UpdatesControllerOptions = {
   /** The Compose project of a server installation, for `journalctl -u meldgrove-updater-<project>`. */
   project: string;
   locale?: Locale;
+  /** The locale of dates; default "en-GB" for English (19 Nov 2026, 14:05), "de-DE" for German. */
+  dateLocale?: string;
   /** Where a tab keeps its followed installation; default: sessionStorage under `meldgrove.updates.<project>`. */
   storage?: InstallStorage;
+  /** A status the page already has (rendered on the server); requests still start as usual. */
+  initialResponse?: UpdatesResponse;
   /** Shows a message (toast). */
   notify?: (notice: Notice) => void;
+  /** Called once when a request finds the session ended (401, 403, 404, or a sign-in page). */
+  onSignedOut?: () => void;
   /** Reloads the page once the new version answers. */
   reload?: () => void;
   /** The clock (epoch ms); for tests. */
@@ -94,13 +100,18 @@ export type UpdatesSnapshot = {
   slow: boolean;
   /** This page follows an installation and reloads when it is done. */
   waiting: boolean;
-  /** 401, 403 or a sign-in page stopped every automatic status request of the page. */
+  /** 401, 403, 404 or a sign-in page stopped every automatic status request of the page. */
   stopped: boolean;
   /** A channel switch runs. */
   savingChannel: boolean;
   /** Epoch ms of this snapshot, for times that pass without new data. */
   now: number;
 };
+
+/** Dates as people in the apps' organizations read them: "19 Nov 2026, 14:05" or "19.11.2026, 14:05". */
+function defaultDateLocale(locale: Locale): string {
+  return locale === "de" ? "de-DE" : "en-GB";
+}
 
 /** An answer without status, for a page whose first status request failed (the button stays). */
 function noStatus(error: string | null): UpdatesResponse {
@@ -126,7 +137,11 @@ function answerError(answer: UpdatesAnswer): string {
   return `Request failed (${answer.status})`;
 }
 
-const isSignedOutStatus = (status: number) => status === 401 || status === 403;
+/**
+ * The session ended or no longer allows this: 401, 403, or the 404 that the
+ * routes answer everyone but app admins.
+ */
+const isSignedOutStatus = (status: number) => status === 401 || status === 403 || status === 404;
 
 /**
  * The update button's behaviour for one page, free of React: asks the app's
@@ -138,24 +153,30 @@ const isSignedOutStatus = (status: number) => status === 401 || status === 403;
  * the standalone element render its snapshot.
  */
 export class UpdatesController {
-  readonly appName: string;
+  appName: string;
   readonly project: string;
   locale: Locale;
+  dateLocale: string;
   t: Translate<(typeof messages)["en"]>;
 
   private readonly transport: UpdatesTransport;
   private readonly storage: InstallStorage;
-  private readonly notifyFn: (notice: Notice) => void;
+  private notifyFn: (notice: Notice) => void;
+  private onSignedOutFn: (() => void) | null;
   private readonly reloadFn: () => void;
   private readonly clock: () => number;
-  private readonly pageStart: number;
+  private readonly fixedDateLocale: string | null;
+  private pageStart: number;
+  private restored = false;
   private readonly listeners = new Set<() => void>();
+  /** The request that asks for the status now, to cancel when an installation starts. */
+  private statusAbort: AbortController | null = null;
 
   private response: UpdatesResponse | undefined;
   /** When the latest status request ended, and whether it failed (no status, or not reachable). */
   private lastPoll: { at: number; failed: boolean; error: string | null } | null = null;
-  private pending: PendingInstall | null;
-  private ignored: Ignored | null;
+  private pending: PendingInstall | null = null;
+  private ignored: Ignored | null = null;
   private recent: LastResult | null = null;
   private checkRunning = false;
   private savingChannel = false;
@@ -172,21 +193,27 @@ export class UpdatesController {
   private reloadTimer: ReturnType<typeof setTimeout> | null = null;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private snapshot: UpdatesSnapshot;
+  /** The snapshot before `start`: what a server renders, and so what hydration expects. */
+  readonly initialSnapshot: UpdatesSnapshot;
 
   constructor(options: UpdatesControllerOptions) {
     this.transport = options.transport;
     this.appName = options.appName;
     this.project = options.project;
     this.locale = options.locale ?? "en";
+    this.fixedDateLocale = options.dateLocale ?? null;
+    this.dateLocale = this.fixedDateLocale ?? defaultDateLocale(this.locale);
     this.t = translate(messages, this.locale);
     this.storage = options.storage ?? installStorage(`meldgrove.updates.${options.project}`);
     this.notifyFn = options.notify ?? (() => undefined);
+    this.onSignedOutFn = options.onSignedOut ?? null;
     this.reloadFn = options.reload ?? (() => window.location.reload());
     this.clock = options.now ?? Date.now;
     this.pageStart = this.clock();
-    this.pending = this.storage.loadPending();
-    this.ignored = this.storage.loadIgnored();
+    this.response = options.initialResponse;
+    // The followed installation comes from sessionStorage in `start`, never while rendering.
     this.snapshot = this.compute();
+    this.initialSnapshot = this.snapshot;
   }
 
   // --- Subscription -------------------------------------------------------------------------
@@ -197,6 +224,9 @@ export class UpdatesController {
   };
 
   getSnapshot = (): UpdatesSnapshot => this.snapshot;
+
+  /** For `useSyncExternalStore` on the server and during hydration. */
+  getServerSnapshot = (): UpdatesSnapshot => this.initialSnapshot;
 
   private emit() {
     this.snapshot = this.compute();
@@ -245,14 +275,36 @@ export class UpdatesController {
   setLocale(locale: Locale) {
     if (locale === this.locale) return;
     this.locale = locale;
+    this.dateLocale = this.fixedDateLocale ?? defaultDateLocale(locale);
     this.t = translate(messages, locale);
     this.emit();
+  }
+
+  /** Options a page may change after the controller exists. */
+  configure(options: {
+    appName?: string;
+    notify?: (notice: Notice) => void;
+    onSignedOut?: (() => void) | null;
+  }) {
+    if (options.notify) this.notifyFn = options.notify;
+    if (options.onSignedOut !== undefined) this.onSignedOutFn = options.onSignedOut;
+    if (options.appName && options.appName !== this.appName) {
+      this.appName = options.appName;
+      this.emit();
+    }
   }
 
   /** Starts asking for the status; idempotent. Arms the deadline of a restored attempt first. */
   start() {
     if (this.started) return;
     this.started = true;
+    if (!this.restored) {
+      this.restored = true;
+      this.pageStart = this.clock();
+      this.pending = this.storage.loadPending();
+      this.ignored = this.storage.loadIgnored();
+      this.emit();
+    }
     this.armTimers();
     window.addEventListener("focus", this.onFocus);
     window.addEventListener("online", this.onFocus);
@@ -283,7 +335,8 @@ export class UpdatesController {
     if (document.visibilityState === "visible") this.onFocus();
   };
 
-  private notify(notice: Notice) {
+  /** Shows a message the way the page shows the controller's own (toast). */
+  notify(notice: Notice) {
     this.notifyFn(notice);
   }
 
@@ -358,13 +411,18 @@ export class UpdatesController {
     if (this.deadlineTimer !== null) clearTimeout(this.deadlineTimer);
     this.pollTimer = this.deadlineTimer = null;
     this.emit();
+    this.onSignedOutFn?.();
   }
 
   // --- Requests -----------------------------------------------------------------------------
 
   /** Runs one request with a timeout of its own; a timeout throws an Error with the "did not answer" text. */
-  private async send(action: UpdatesAction, body: unknown, timeoutMs: number): Promise<UpdatesAnswer> {
-    const controller = new AbortController();
+  private async send(
+    action: UpdatesAction,
+    body: unknown,
+    timeoutMs: number,
+    controller = new AbortController(),
+  ): Promise<UpdatesAnswer> {
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
@@ -386,20 +444,37 @@ export class UpdatesController {
     this.statusRunning = true;
     const sentAt = this.clock();
     const timeout = statusTimeout(reconcileDeadline(this.pending, this.pageStart), sentAt);
+    const abort = new AbortController();
+    this.statusAbort = abort;
     try {
-      const answer = await this.send("status", undefined, timeout);
+      const answer = await this.send("status", undefined, timeout, abort);
+      if (abort.signal.aborted) return;
       if (isSignedOutStatus(answer.status)) return this.signOut();
       const parsed = parseUpdatesResponse(answer.data);
       if (answer.status !== 200 || !parsed) throw new Error(answerError(answer));
       this.lastStatusAt = this.clock();
       this.receive(parsed, sentAt);
     } catch (error) {
+      // Cancelled for an installation that just started: its own polls follow.
+      if (abort.signal.aborted && this.statusAbort !== abort) return;
       if (error instanceof SignedOutError) return this.signOut();
       this.pollFailed(errorMessage(error));
     } finally {
-      this.statusRunning = false;
-      if (this.pollTimer === null) this.schedule();
+      if (this.statusAbort === abort) {
+        this.statusAbort = null;
+        this.statusRunning = false;
+        if (this.pollTimer === null) this.schedule();
+      }
     }
+  }
+
+  /** Drops the status request in flight, so that polling follows a new installation at once. */
+  private cancelStatus() {
+    const abort = this.statusAbort;
+    if (!abort) return;
+    this.statusAbort = null;
+    this.statusRunning = false;
+    abort.abort();
   }
 
   /** A status request failed (network error, timeout, 5xx): while following, an observed outage. */
@@ -518,6 +593,7 @@ export class UpdatesController {
    */
   install = async (update: Update): Promise<void> => {
     this.recent = null;
+    this.cancelStatus();
     const attempt = startAttempt(update.version, this.response, this.clock());
     this.open = true;
     this.setPending(attempt);

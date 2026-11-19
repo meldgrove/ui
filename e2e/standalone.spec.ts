@@ -40,22 +40,40 @@ const status = {
   error: null,
 };
 
-const page = (theme: string) => `<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<style>body { font-family: Georgia, serif; margin: 0; background: ${theme === "dark" ? "#111" : "#f6f7f5"}; }
+const css = (
+  theme: string,
+) => `body { font-family: Georgia, serif; margin: 0; background: ${theme === "dark" ? "#111" : "#f6f7f5"}; }
 header { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid #ccc; }
-main { max-width: 720px; margin: 24px auto; }</style>
+main { max-width: 720px; margin: 24px auto; }
+/* The app's own accent reaches the elements. */
+:root { --mg-accent: oklch(0.5 0.13 160); --mg-accent-foreground: oklch(0.985 0 0); }
+.dark { --mg-accent: oklch(0.75 0.13 160); --mg-accent-foreground: oklch(0.2 0.02 160); }`;
+
+const page = (theme: string) => `<!doctype html>
+<html lang="en"${theme === "dark" ? ' class="dark"' : ""}><head><meta charset="utf-8">
+<link rel="stylesheet" href="/static/page.css">
 <script type="module" src="/static/meldgrove-updates.js"></script></head>
 <body><header>Admin
-<meldgrove-update-button url="/admin/updates/" app-name="Meldgrove IAM" project="iam" theme="${theme}" csrf-token="test-token" guide-url="https://github.com/meldgrove/iam"></meldgrove-update-button>
+<meldgrove-update-button url="/admin/updates/" app-name="Meldgrove IAM" project="iam" csrf-token="test-token" guide-url="https://github.com/meldgrove/iam"></meldgrove-update-button>
 </header><main>
-<meldgrove-updates-settings url="/admin/updates/" app-name="Meldgrove IAM" project="iam" theme="${theme}" csrf-token="test-token"></meldgrove-updates-settings>
+<meldgrove-updates-settings url="/admin/updates/" app-name="Meldgrove IAM" project="iam" csrf-token="test-token"></meldgrove-updates-settings>
 </main></body></html>`;
+
+/** A strict policy, as IAM has: no inline styles or scripts. */
+const CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:";
 
 for (const theme of ["light", "dark"]) {
   test(`standalone elements, ${theme}`, async ({ page: browser }) => {
     const posts: { url: string; csrf: string | undefined }[] = [];
+    const errors: string[] = [];
+    browser.on("console", (message) => {
+      if (message.type() === "error") errors.push(message.text());
+    });
+    browser.on("pageerror", (error) => errors.push(error.message));
     await browser.clock.setFixedTime(new Date("2026-11-19T10:00:00Z"));
+    await browser.route("http://app.test/static/page.css", (route) =>
+      route.fulfill({ contentType: "text/css", body: css(theme) }),
+    );
     await browser.route("http://app.test/static/meldgrove-updates.js", (route) =>
       route.fulfill({ contentType: "text/javascript", body: bundle }),
     );
@@ -66,7 +84,11 @@ for (const theme of ["light", "dark"]) {
       return route.fulfill({ contentType: "application/json", body: JSON.stringify(status) });
     });
     await browser.route("http://app.test/", (route) =>
-      route.fulfill({ contentType: "text/html", body: page(theme) }),
+      route.fulfill({
+        contentType: "text/html",
+        headers: { "Content-Security-Policy": CSP },
+        body: page(theme),
+      }),
     );
     await browser.goto("http://app.test/");
 
@@ -80,9 +102,17 @@ for (const theme of ["light", "dark"]) {
     await expect(browser.getByText("Faster search in long lists")).toBeVisible();
     await expect(browser).toHaveScreenshot(`standalone-${theme}.png`);
 
+    // The app's accent colors the primary button inside the shadow root.
+    const install = browser.getByRole("button", { name: "Install now" });
+    const background = await install.evaluate((element) => getComputedStyle(element).backgroundColor);
+    expect(background).not.toMatch(/^oklch\(0\.(205|922) 0 0\)$/);
+    expect(background).toContain("160");
+
     // POSTs carry the CSRF token.
-    await browser.getByRole("button", { name: "Check now" }).click();
+    await browser.locator("meldgrove-update-button").getByRole("button", { name: "Check now" }).click();
     await expect.poll(() => posts.length).toBe(1);
     expect(posts[0]).toEqual({ url: "http://app.test/admin/updates/check/", csrf: "test-token" });
+    // Nothing the policy refused, nothing that failed.
+    expect(errors).toEqual([]);
   });
 }

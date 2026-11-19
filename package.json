@@ -100,10 +100,25 @@
     "cmdk": {
       "optional": true
     },
+    "lucide-react": {
+      "optional": true
+    },
+    "radix-ui": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
     "react-day-picker": {
       "optional": true
     },
+    "react-dom": {
+      "optional": true
+    },
     "recharts": {
+      "optional": true
+    },
+    "sonner": {
       "optional": true
     }
   },

@@ -130,6 +130,40 @@ describe("UpdateButton", () => {
     await waitFor(() => expect(notices).toEqual([{ kind: "success", title: "Up to date · 0.2.0" }]));
   });
 
+  it("names a preview's changes, not its release notes, and says links open a new tab", async () => {
+    const user = userEvent.setup();
+    const preview = release("0.2.1-preview.3", { preview: true });
+    const transport = fakeTransport({
+      status: () => ok(response(status({ channel: "preview", available: preview }))),
+    });
+    renderWith(transport);
+    await user.click(await screen.findByRole("button", { name: "Update available · 0.2.1-preview.3" }));
+    expect(await screen.findByRole("link", { name: "Changes (opens in a new tab)" })).toBeInTheDocument();
+  });
+
+  it("keeps the reason of an unmarked failure in the offer after a reload", async () => {
+    const user = userEvent.setup();
+    const transport = fakeTransport({
+      status: () =>
+        ok(
+          response(
+            status({
+              available: release("0.2.1"),
+              last: {
+                version: "0.2.1",
+                result: "failed",
+                message: "The deploy link answered 502.",
+                finishedAt: "2026-11-19T09:00:00Z",
+              },
+            }),
+          ),
+        ),
+    });
+    renderWith(transport);
+    await user.click(await screen.findByRole("button", { name: "Update available · 0.2.1" }));
+    expect(await screen.findByText("0.2.1 failed: The deploy link answered 502.")).toBeInTheDocument();
+  });
+
   it("speaks German", async () => {
     const user = userEvent.setup();
     const transport = fakeTransport({ status: () => ok(response(status({ available: release("0.2.1") }))) });
@@ -170,13 +204,33 @@ describe("UpdatesSettingsCard", () => {
     expect(screen.getByText("The platform installs them (deploy link).")).toBeInTheDocument();
   });
 
-  it("explains an unreachable update service", async () => {
+  it("explains an unreachable update service once, with the guide", async () => {
     const transport = fakeTransport({ status: () => ok(response(null)) });
     renderWith(transport, "en", <UpdatesSettingsCard />);
-    expect(
-      await screen.findByText(
-        "The update service is not reachable. Automatic updates need the updater service from compose.yaml (deployment guide).",
-      ),
-    ).toBeInTheDocument();
+    expect(await screen.findAllByText("The update service is not reachable.")).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "deployment guide" })).toHaveAttribute(
+      "href",
+      "https://example.org/guide",
+    );
+    expect(screen.queryByRole("radio", { checked: true })).not.toBeInTheDocument();
+  });
+
+  it("shows the last check and the updater, and checks on request", async () => {
+    const user = userEvent.setup();
+    const transport = fakeTransport({
+      status: () => ok(response(status())),
+      check: () => ok(response(status())),
+    });
+    renderWith(transport, "en", <UpdatesSettingsCard />);
+    expect(await screen.findByText("· Updater 0.2.0")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Updates" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Check now" }));
+    await waitFor(() => expect(transport.count("check")).toBe(1));
+  });
+
+  it("asks to sign in again when the routes refuse before any status", async () => {
+    const transport = fakeTransport({ status: () => ok({ error: "Not found." }, 404) });
+    renderWith(transport, "en", <UpdatesSettingsCard />);
+    expect(await screen.findByText("Sign in again as an admin to manage updates.")).toBeInTheDocument();
   });
 });

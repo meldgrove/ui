@@ -8,7 +8,9 @@
  *     guide-url="…" locale="en" csrf-token="…"></meldgrove-update-button>
  *   <meldgrove-updates-settings url="/admin/updates/" …same attributes…></meldgrove-updates-settings>
  *
- * Elements with the same `url` share one status. Without `csrf-token`, the
+ * Elements with the same `url` share one status. Optional: `date-locale`
+ * (e.g. de-DE), `storage-key` (sessionStorage prefix), and `plain` on the
+ * settings for no card of their own. Without `csrf-token`, the
  * token comes from the cookie `csrf-cookie` (default `csrftoken`) and is sent
  * as `csrf-header` (default `X-CSRFToken`). `theme`: `class` (default; dark
  * while <html> has the class `dark`), `system` (the device's setting),
@@ -24,7 +26,8 @@ import { UpdatesController } from "./controller.ts";
 import { UpdatesContextProvider } from "./react.tsx";
 import { fetchTransport, readCookie } from "./transport.ts";
 import { UpdateButton } from "./update-button.tsx";
-import { UpdatesSettingsCard } from "./updates-settings.tsx";
+import { UpdatesSettings, UpdatesSettingsCard } from "./updates-settings.tsx";
+import { installStorage } from "./state.ts";
 import { toastNotice } from "./notice.ts";
 import styles from "./element.css?inline";
 
@@ -46,11 +49,11 @@ function styleSheet(): CSSStyleSheet {
     const properties = Array.from(sheet.cssRules)
       .filter((rule) => typeof CSSPropertyRule !== "undefined" && rule instanceof CSSPropertyRule)
       .map((rule) => rule.cssText);
-    if (properties.length > 0 && !document.getElementById("meldgrove-properties")) {
-      const style = document.createElement("style");
-      style.id = "meldgrove-properties";
-      style.textContent = properties.join("\n");
-      document.head.append(style);
+    if (properties.length > 0) {
+      // A constructed sheet, not a <style>: pages with style-src 'self' allow it.
+      const registrations = new CSSStyleSheet();
+      registrations.replaceSync(properties.join("\n"));
+      document.adoptedStyleSheets = [...document.adoptedStyleSheets, registrations];
     }
   }
   return sheet;
@@ -79,6 +82,10 @@ function controllerFor(element: HTMLElement): UpdatesController {
       appName: element.getAttribute("app-name") ?? "Meldgrove",
       project: element.getAttribute("project") ?? "app",
       locale: localeOf(element),
+      dateLocale: element.getAttribute("date-locale") ?? undefined,
+      storage: element.getAttribute("storage-key")
+        ? installStorage(element.getAttribute("storage-key")!)
+        : undefined,
       notify: toastNotice,
     });
     shared = { controller, elements: new Set() };
@@ -175,9 +182,10 @@ class UpdateButtonElement extends MeldgroveElement {
   }
 }
 
+/** The settings in a card of their own; with the attribute `plain`, without the card (inside the app's section). */
 class UpdatesSettingsElement extends MeldgroveElement {
   protected content() {
-    return <UpdatesSettingsCard />;
+    return this.hasAttribute("plain") ? <UpdatesSettings /> : <UpdatesSettingsCard />;
   }
 }
 
@@ -192,14 +200,18 @@ function ensureToaster(theme: string) {
   wrapper.className = "meldgrove-root";
   shadow.append(wrapper);
   document.body.append(host);
-  const sync = () => wrapper.classList.toggle("dark", isDark(host));
+  const root = createRoot(wrapper);
+  const sync = () => {
+    const dark = isDark(host);
+    wrapper.classList.toggle("dark", dark);
+    root.render(<Toaster position="bottom-right" theme={dark ? "dark" : "light"} />);
+  };
   sync();
   new MutationObserver(sync).observe(document.documentElement, {
     attributes: true,
     attributeFilter: ["class"],
   });
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", sync);
-  createRoot(wrapper).render(<Toaster position="bottom-right" theme={isDark(host) ? "dark" : "light"} />);
 }
 
 if (!customElements.get("meldgrove-update-button")) {

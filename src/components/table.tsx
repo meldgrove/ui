@@ -3,9 +3,22 @@
 import * as React from "react";
 import { cn } from "../lib/utils.ts";
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+/**
+ * Changed from shadcn: `scrollLabel` makes the scroll container a labelled,
+ * focusable region, so keyboard users can scroll a table wider than the page
+ * (WCAG 2.1.1).
+ */
+function Table({
+  className,
+  scrollLabel,
+  ...props
+}: React.ComponentProps<"table"> & { scrollLabel?: string }) {
   return (
-    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+    <div
+      data-slot="table-container"
+      className="relative w-full overflow-x-auto"
+      {...(scrollLabel ? { role: "region", "aria-label": scrollLabel, tabIndex: 0 } : {})}
+    >
       <table data-slot="table" className={cn("w-full caption-bottom text-sm", className)} {...props} />
     </div>
   );

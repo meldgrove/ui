@@ -15,7 +15,7 @@ import {
 import { Badge } from "../components/badge.tsx";
 import { Button } from "../components/button.tsx";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/popover.tsx";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip.tsx";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/tooltip.tsx";
 import { formatDateTime, formatRelative } from "../lib/format.ts";
 import { common, translate } from "../lib/i18n.tsx";
 import { cn } from "../lib/utils.ts";
@@ -55,20 +55,24 @@ function StateIcon({ state }: { state: ButtonState }) {
   }
 }
 
-function ReleaseNotesLink({ controller, url }: { controller: UpdatesController; url: string | null }) {
-  if (!url) return null;
+/** The release notes of a release, or the changes (compare view) of a preview. */
+function ReleaseNotesLink({ controller, update }: { controller: UpdatesController; update: Update }) {
+  if (!update.url) return null;
   return (
     <a
-      href={url}
+      href={update.url}
       target="_blank"
       rel="noreferrer"
       className="text-primary inline-flex w-fit items-center gap-1 text-sm font-medium underline-offset-4 hover:underline"
     >
-      {controller.t("releaseNotes")}
-      <ExternalLink className="size-3.5" aria-hidden />
+      {controller.t(update.preview ? "changes" : "releaseNotes")}
+      <ExternalLink className="size-3.5" aria-hidden />{" "}
+      <span className="sr-only">{controller.t("opensInNewTab")}</span>
     </a>
   );
 }
+
+const STAGES = new Set(["pulling", "starting", "rolling-back", "deploying"]);
 
 /** In mode off, in place of the install buttons: nothing can install from here. */
 function OffNote({ controller }: { controller: UpdatesController }) {
@@ -113,9 +117,9 @@ function UpdateSummary({ controller, snapshot, update }: Props & { update: Updat
         {update.publishedAt ? (
           <span
             className="text-muted-foreground"
-            title={formatDateTime(update.publishedAt, controller.locale)}
+            title={formatDateTime(update.publishedAt, controller.dateLocale)}
           >
-            · {formatRelative(update.publishedAt, controller.locale, snapshot.now)}
+            · {formatRelative(update.publishedAt, controller.dateLocale, snapshot.now)}
           </span>
         ) : null}
         {update.preview ? <Badge variant="secondary">{controller.t("preview")}</Badge> : null}
@@ -178,8 +182,10 @@ function UpdatePanel(props: PanelProps) {
         <Title>{t("installing", { version })}</Title>
         {snapshot.restarting ? (
           <p className="text-sm">{t("restarting")}</p>
-        ) : stage && stage !== "requested" ? (
-          <p className="text-sm">{t(`stage_${stage}`, { version: status?.installed ?? running ?? "" })}</p>
+        ) : stage && STAGES.has(stage) ? (
+          <p className="text-sm">
+            {t(`stage_${stage as "pulling"}`, { version: status?.installed ?? running ?? "" })}
+          </p>
         ) : null}
         {snapshot.waiting ? (
           <p className="text-muted-foreground text-sm">{t("restarts", { app: controller.appName })}</p>
@@ -230,7 +236,7 @@ function UpdatePanel(props: PanelProps) {
         <Title>{t("available")}</Title>
         <UpdateSummary controller={controller} snapshot={snapshot} update={available} />
         <ReplacedFailure controller={controller} snapshot={snapshot} />
-        <ReleaseNotesLink controller={controller} url={available.url} />
+        <ReleaseNotesLink controller={controller} update={available} />
         {!installable ? (
           <OffNote controller={controller} />
         ) : (
@@ -238,7 +244,7 @@ function UpdatePanel(props: PanelProps) {
             {installsAt ? (
               <p className="text-muted-foreground text-sm">
                 {new Date(installsAt).getTime() > snapshot.now
-                  ? t("installsOn", { date: formatDateTime(installsAt, controller.locale) })
+                  ? t("installsOn", { date: formatDateTime(installsAt, controller.dateLocale) })
                   : t("installsNextCheck")}
               </p>
             ) : null}
@@ -256,7 +262,7 @@ function UpdatePanel(props: PanelProps) {
         <Title>{t("attention", { version: attention.version })}</Title>
         <p className="text-sm">{t("attentionText")}</p>
         <ReplacedFailure controller={controller} snapshot={snapshot} />
-        <ReleaseNotesLink controller={controller} url={attention.url} />
+        <ReleaseNotesLink controller={controller} update={attention} />
         {!installable ? (
           <OffNote controller={controller} />
         ) : canInstall(status, attention) ? (
@@ -288,7 +294,9 @@ function UpdatePanel(props: PanelProps) {
             {snapshot.checking
               ? t("checking")
               : status.checkedAt
-                ? t("checked", { time: formatRelative(status.checkedAt, controller.locale, snapshot.now) })
+                ? t("checked", {
+                    time: formatRelative(status.checkedAt, controller.dateLocale, snapshot.now),
+                  })
                 : t("notChecked")}
           </span>
           {state !== "installing" && !snapshot.checking ? (
@@ -335,7 +343,7 @@ function ConfirmInstall(props: {
                 {target.anyway ? `${t("confirmAnywayText", { app: controller.appName })} ` : null}
                 {t("confirmText", { app: controller.appName })}
               </AlertDialogDescription>
-              {target.anyway ? <ReleaseNotesLink controller={controller} url={target.update.url} /> : null}
+              {target.anyway ? <ReleaseNotesLink controller={controller} update={target.update} /> : null}
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>{c("cancel")}</AlertDialogCancel>
@@ -369,7 +377,8 @@ export function UpdateButton({ className }: { className?: string }) {
   const failure = failureOf(snapshot.response, snapshot.recent);
   const label: Record<ButtonState, string> = {
     loading: t("checkForUpdates"),
-    unreachable: t("unreachable"),
+    // The route's reason when it has one (the app answers, the update service does not).
+    unreachable: snapshot.response?.error ?? t("unreachable"),
     installing: snapshot.restarting
       ? t("restarting")
       : t("installing", { version: snapshot.pending?.version ?? status?.installing?.version ?? "" }),
@@ -382,7 +391,7 @@ export function UpdateButton({ className }: { className?: string }) {
   };
 
   return (
-    <>
+    <TooltipProvider>
       <Popover open={snapshot.open} onOpenChange={controller.setOpen}>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -422,6 +431,6 @@ export function UpdateButton({ className }: { className?: string }) {
           void controller.install(update);
         }}
       />
-    </>
+    </TooltipProvider>
   );
 }

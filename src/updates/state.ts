@@ -96,8 +96,11 @@ export function failureOf(
 }
 
 /**
- * A failed latest result that a newer offer took the place of: the popover
- * shows the offer, with the failure as a line in it ("0.2.1 failed: …").
+ * A failed latest result that the popover shows as a line in an offer
+ * ("0.2.1 failed: …"): a newer offer took its place, or the updater offers the
+ * same version again without marking it failed (Updater 0.2 does so when the
+ * deploy link failed or no host took or finished the installation), so the
+ * reason stays visible after a reload.
  */
 export function replacedFailure(
   response: UpdatesResponse | undefined,
@@ -106,8 +109,7 @@ export function replacedFailure(
   const status = response?.updater;
   const last = status?.last;
   if (!status || !last || !FAILED_RESULTS.has(last.result) || failureOf(response, recent)) return null;
-  const offers = offersOf(status);
-  if (offers.length === 0 || offers.some((update) => update.version === last.version)) return null;
+  if (offersOf(status).length === 0) return null;
   return { version: last.version, message: last.message };
 }
 

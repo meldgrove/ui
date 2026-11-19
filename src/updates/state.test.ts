@@ -524,6 +524,13 @@ describe("replacedFailure", () => {
     expect(replacedFailure(none, rolledBack)).toBeNull();
     expect(replacedFailure(response(status({ available: release("0.2.2") })))).toBeNull();
   });
+
+  it("keeps the reason of an unmarked failure of the offered version as a line in the offer", () => {
+    // Updater 0.2 offers the version again without `failed` when the deploy link failed.
+    const unmarked = response(status({ available: release("0.2.1"), last: rolledBack }));
+    expect(panelState(unmarked, null)).toBe("available");
+    expect(replacedFailure(unmarked)).toEqual({ version: "0.2.1", message: "migrate failed." });
+  });
 });
 
 describe("helpers", () => {
