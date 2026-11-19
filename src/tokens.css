@@ -1,0 +1,94 @@
+/*
+ * Meldgrove design tokens: the colors, radius and sidebar colors every
+ * component of @meldgrove/ui uses (shadcn/ui names), light under :root and
+ * dark under .dark. Plain CSS: apps without Tailwind can use them too.
+ *
+ * Brand layer: the accent (--mg-accent, --mg-accent-foreground) colors
+ * primary buttons, links, the active sidebar item and the update dot. It is
+ * unset by default, so every app shares the fallback below. An app gets its
+ * own accent by setting both variables after this file, for light and for
+ * dark (they inherit into the standalone elements' shadow roots too):
+ *
+ *   :root { --mg-accent: oklch(0.55 0.15 160); --mg-accent-foreground: oklch(0.985 0 0); }
+ *   .dark { --mg-accent: oklch(0.75 0.13 160); --mg-accent-foreground: oklch(0.2 0 0); }
+ *
+ * The Meldgrove brand palette is not chosen yet; the values below are the
+ * neutral shadcn palette the apps used so far. A palette change here reaches
+ * every app with its next update of the package.
+ */
+
+:root,
+.meldgrove-root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: var(--mg-accent, oklch(0.205 0 0));
+  --primary-foreground: var(--mg-accent-foreground, oklch(0.985 0 0));
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.6 0.15 150);
+  --warning: oklch(0.75 0.15 75);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: var(--mg-accent, oklch(0.205 0 0));
+  --sidebar-primary-foreground: var(--mg-accent-foreground, oklch(0.985 0 0));
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: var(--mg-accent, oklch(0.922 0 0));
+  --primary-foreground: var(--mg-accent-foreground, oklch(0.205 0 0));
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.72 0.15 150);
+  --warning: oklch(0.8 0.15 75);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: var(--mg-accent, oklch(0.922 0 0));
+  --sidebar-primary-foreground: var(--mg-accent-foreground, oklch(0.205 0 0));
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}

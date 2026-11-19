@@ -1,0 +1,22 @@
+/* Styles of the standalone elements (element.tsx), adopted by their shadow roots. */
+@import "tailwindcss" source(none);
+@import "../theme.css";
+@import "sonner/dist/styles.css";
+
+/* Only what the elements render. */
+@source "./{update-button,updates-settings}.tsx";
+@source "../components/{alert,alert-dialog,badge,button,card,empty,field,label,popover,radio-group,separator,sonner,spinner,states,tooltip}.tsx";
+
+:host {
+  display: inline-block;
+  font-family: inherit;
+}
+
+:host(meldgrove-updates-settings) {
+  display: block;
+}
+
+.meldgrove-root {
+  color: var(--color-foreground);
+  -webkit-font-smoothing: antialiased;
+}

@@ -1,0 +1,36 @@
+# Weekly version updates, one pull request per group. Security updates
+# ignore the schedule and the cooldown.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      npm-minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # The types follow the Node.js major of CI.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # typescript-eslint supports only the TypeScript versions in its peer range.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns: ["*"]
