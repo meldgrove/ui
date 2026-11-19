@@ -42,7 +42,13 @@ import { cn } from "@meldgrove/ui/utils";
 ```
 
 Client components carry `"use client"`, so Next.js server components can
-import them.
+import them; no `transpilePackages` is needed. `styles.css` lists every
+component as a Tailwind source. An app that wants only the classes of the
+components it uses imports `@meldgrove/ui/theme.css` instead and adds
+`@source` lines for those files in `node_modules/@meldgrove/ui/dist/components`.
+
+`SidebarInset` renders a `<div>`; the app's page content brings its own
+`<main>`.
 
 ### Language
 
@@ -115,9 +121,22 @@ import { UpdateButton, UpdatesProvider, UpdatesSettingsCard } from "@meldgrove/u
   and `<url>/channel` (a trailing slash carries over).
 - `project` names the updater's systemd unit in the hint after 15 minutes
   (`journalctl -u meldgrove-updater-<project>`).
+- 401, 403, 404 (what the routes answer non-admins) and sign-in pages end
+  the session for the page: no more automatic requests. `onSignedOut` lets
+  the app react (for example, show its sign-in page).
 - An app with its own API helper passes `transport` instead of `url` (see
   `UpdatesTransport` in `@meldgrove/ui/updates`).
-- `@meldgrove/ui/updates/core` has the logic without React, for tests.
+- `initialResponse`: a status the server already has, so the settings show
+  at once. `dateLocale`: dates in another format (default `en-GB` for
+  English, `de-DE` for German).
+- Read once when the provider mounts: `project`, `url`, `transport`,
+  `storageKey`/`storage`, `dateLocale`, `initialResponse`. `appName`,
+  `guideUrl`, `locale`, `notify` and `onSignedOut` follow changes.
+- In Next.js, put the provider in a client component of the app when it gets
+  functions (`transport`, `notify`, `onSignedOut`). The status is read from
+  sessionStorage only after hydration, so server and client render the same.
+- `@meldgrove/ui/updates/core` has the logic without React, for tests and
+  server code.
 
 ## Apps without React
 
@@ -155,8 +174,19 @@ admins:
 | `guide-url`                  | The deployment guide's section on automatic updates                                    |
 | `csrf-token`                 | Sent as `csrf-header` with every POST; without it, the cookie `csrf-cookie`            |
 | `csrf-cookie`, `csrf-header` | Default `csrftoken` and `X-CSRFToken` (Django)                                         |
+| `date-locale`                | Format of dates, e.g. `de-DE`; default `en-GB` for English                             |
+| `storage-key`                | sessionStorage prefix; default `meldgrove.updates.<project>`                           |
+| `plain`                      | On the settings: no card of their own, for a section of the app                        |
 
-Apps without Tailwind can use `tokens.css` for the same colors.
+The elements work under a strict Content Security Policy (`style-src
+'self'`, `script-src 'self'`): their styles are constructed style sheets.
+An app's accent (`--mg-accent` on `:root`) reaches them. The React peer
+dependencies are optional, so `npm install @meldgrove/ui` in an app without
+React installs only a few small packages.
+
+Apps without Tailwind can use `tokens.css` for the same colors. It switches
+to dark with the class `dark` on `<html>`; an app that follows the device
+sets that class from `prefers-color-scheme` in a small script.
 
 ## Development
 
