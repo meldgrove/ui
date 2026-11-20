@@ -17,6 +17,7 @@ const required = [
   "dist/updates/index.d.ts",
   "dist/updates/core.js",
   "dist/standalone/meldgrove-updates.js",
+  "dist/standalone/meldgrove-secret-input.js",
 ];
 const missing = required.filter((file) => !files.has(file));
 const unwanted = [...files].filter((file) => /^(src|demo|e2e|scripts)\/|\.test\.|\/test\//.test(file));
