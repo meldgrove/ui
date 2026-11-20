@@ -49,6 +49,7 @@ import { useT } from "../lib/i18n.tsx";
 import { THEME_PREFERENCES, type ThemePreference } from "../lib/theme.ts";
 import { FrameCrumbs, type Crumb } from "../frame/crumbs.tsx";
 import { shortcutClashes } from "../frame/keyboard.ts";
+import { activeHref } from "../frame/nav.ts";
 import { frameMessages } from "../frame/messages.ts";
 import { SearchButton, SearchDialog, useSearchKeys, type AppSearchOptions } from "../frame/search.tsx";
 import {
@@ -126,31 +127,6 @@ function sidebarCookie(): boolean {
   return !document.cookie.split("; ").includes(`${SIDEBAR_COOKIE}=false`);
 }
 
-function pathOf(href: string): string {
-  return href.split(/[?#]/)[0] ?? href;
-}
-
-const within = (pathname: string, path: string) => pathname === path || pathname.startsWith(`${path}/`);
-
-/**
- * The item that is active: the longest path the current one starts with
- * ("/" and `exact` items only on themselves; `match` paths with their sub-pages).
- */
-export function activeHref(pathname: string, items: NavItem[]): string | undefined {
-  let best: { href: string; length: number } | undefined;
-  for (const item of items) {
-    const path = pathOf(item.href);
-    const own = path === "/" || item.exact ? pathname === path : within(pathname, path);
-    const lengths = [
-      own ? path.length : -1,
-      ...(item.match ?? []).map((extra) => (within(pathname, extra) ? extra.length : -1)),
-    ];
-    const length = Math.max(...lengths);
-    if (length >= 0 && (best === undefined || length > best.length)) best = { href: item.href, length };
-  }
-  return best?.href;
-}
-
 function initials(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
   const letters = words.length > 1 ? [words[0]!, words.at(-1)!] : words;
@@ -165,6 +141,8 @@ function UserMenu(props: {
   settingsHref?: string;
   onSignOut: () => void;
   onShortcuts: () => void;
+  /** Closes the sheet on phones once a page is chosen. */
+  onNavigate: () => void;
 }) {
   const t = useT(frameMessages);
   const { isMobile } = useSidebar();
@@ -229,7 +207,7 @@ function UserMenu(props: {
         </DropdownMenuSub>
         {props.settingsHref ? (
           <DropdownMenuItem asChild>
-            <Link href={props.settingsHref}>
+            <Link href={props.settingsHref} onClick={props.onNavigate}>
               <Settings />
               {t("settings")}
             </Link>
@@ -252,9 +230,12 @@ function UserMenu(props: {
 
 function FrameSidebar(props: AppFrameProps & { onSearch: () => void; onShortcuts: () => void }) {
   const t = useT(frameMessages);
-  const { isMobile, setOpenMobile } = useSidebar();
+  const { isMobile, setOpenMobile, state } = useSidebar();
   const Link = props.link;
   const items = props.nav.flatMap((group) => group.items);
+  // Collapsed on a wide screen, the sidebar is off screen: keep its contents out of the tab
+  // order. Not on the whole sidebar, so that its edge (the rail) still opens it.
+  const hidden = !isMobile && state === "collapsed";
   const active = activeHref(props.pathname, items);
   // On phones the sidebar is a sheet: it closes once a page is chosen.
   const close = () => {
@@ -263,7 +244,7 @@ function FrameSidebar(props: AppFrameProps & { onSearch: () => void; onShortcuts
 
   return (
     <Sidebar variant="floating" collapsible="offcanvas">
-      <SidebarHeader>
+      <SidebarHeader inert={hidden}>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
@@ -291,7 +272,7 @@ function FrameSidebar(props: AppFrameProps & { onSearch: () => void; onShortcuts
         </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent inert={hidden}>
         <nav aria-label={t("navigation")} className="contents">
           {props.nav.map((group, index) => (
             <SidebarGroup key={group.label ?? index}>
@@ -321,7 +302,7 @@ function FrameSidebar(props: AppFrameProps & { onSearch: () => void; onShortcuts
         {props.sidebarContent}
       </SidebarContent>
 
-      <SidebarFooter>
+      <SidebarFooter inert={hidden}>
         <SidebarMenu>
           <SidebarMenuItem>
             <UserMenu
@@ -332,6 +313,7 @@ function FrameSidebar(props: AppFrameProps & { onSearch: () => void; onShortcuts
               settingsHref={props.settingsHref}
               onSignOut={props.onSignOut}
               onShortcuts={props.onShortcuts}
+              onNavigate={close}
             />
           </SidebarMenuItem>
         </SidebarMenu>
@@ -379,10 +361,9 @@ export function AppFrame(props: AppFrameProps) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const openSearch = useCallback(() => setSearchOpen(true), []);
   const openShortcuts = useCallback(() => setShortcutsOpen(true), []);
-  const Link = props.link;
 
   const items = props.nav.flatMap((group) => group.items);
-  const signature = items.map((item) => `${item.shortcut ?? ""}:${item.label}`).join("|");
+  const signature = items.map((item) => `${item.shortcut ?? ""}:${item.label}:${item.href}`).join("|");
   const targets = useMemo<GoTarget[]>(
     () =>
       props.nav
@@ -404,24 +385,6 @@ export function AppFrame(props: AppFrameProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature]);
 
-  useSearchKeys({ open: searchOpen, slash: singleKeys, onOpen: openSearch });
-  const waiting = useGoShortcuts({
-    targets,
-    enabled: singleKeys,
-    navigate: props.navigate,
-    onOverview: openShortcuts,
-  });
-
-  const settingsLink = props.settingsHref ? (
-    <Link
-      href={props.settingsHref}
-      onClick={() => setShortcutsOpen(false)}
-      className="text-foreground underline underline-offset-4"
-    >
-      {t("openSettings")}
-    </Link>
-  ) : null;
-
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
       <a
@@ -442,24 +405,88 @@ export function AppFrame(props: AppFrameProps) {
           {props.children}
         </main>
       </SidebarInset>
+      <FrameLayers
+        {...props}
+        pages={items.map((item) => ({ label: item.label, href: item.href, shortcut: item.shortcut }))}
+        targets={targets}
+        singleKeys={singleKeys}
+        searchOpen={searchOpen}
+        setSearchOpen={setSearchOpen}
+        shortcutsOpen={shortcutsOpen}
+        setShortcutsOpen={setShortcutsOpen}
+      />
+    </SidebarProvider>
+  );
+}
+
+/** The search, the shortcuts overview and the keys; inside the sidebar's provider, to close its sheet on phones. */
+function FrameLayers(
+  props: AppFrameProps & {
+    pages: { label: string; href: string; shortcut?: string }[];
+    targets: GoTarget[];
+    singleKeys: boolean;
+    searchOpen: boolean;
+    setSearchOpen: (open: boolean) => void;
+    shortcutsOpen: boolean;
+    setShortcutsOpen: (open: boolean) => void;
+  },
+) {
+  const t = useT(frameMessages);
+  const { setOpenMobile } = useSidebar();
+  const { setSearchOpen, setShortcutsOpen } = props;
+  const Link = props.link;
+  const appNavigate = props.navigate;
+  const navigate = useCallback(
+    (href: string) => {
+      setOpenMobile(false);
+      appNavigate(href);
+    },
+    [setOpenMobile, appNavigate],
+  );
+  const openSearch = useCallback(() => setSearchOpen(true), [setSearchOpen]);
+  const openShortcuts = useCallback(() => setShortcutsOpen(true), [setShortcutsOpen]);
+
+  useSearchKeys({ open: props.searchOpen, slash: props.singleKeys, onOpen: openSearch });
+  const waiting = useGoShortcuts({
+    targets: props.targets,
+    enabled: props.singleKeys,
+    navigate,
+    onOverview: openShortcuts,
+  });
+
+  const settingsLink = props.settingsHref ? (
+    <Link
+      href={props.settingsHref}
+      onClick={() => {
+        setShortcutsOpen(false);
+        setOpenMobile(false);
+      }}
+      className="text-foreground underline underline-offset-4"
+    >
+      {t("openSettings")}
+    </Link>
+  ) : null;
+
+  return (
+    <>
       <SearchDialog
         appName={props.app.name}
-        open={searchOpen}
+        open={props.searchOpen}
         onOpenChange={setSearchOpen}
-        pages={items.map((item) => ({ label: item.label, href: item.href, shortcut: item.shortcut }))}
+        pages={props.pages}
         options={props.search}
-        singleKeys={singleKeys}
-        navigate={props.navigate}
+        singleKeys={props.singleKeys}
+        navigate={navigate}
         onShortcuts={openShortcuts}
       />
       <ShortcutsDialog
-        targets={targets}
-        enabled={singleKeys}
-        open={shortcutsOpen}
+        targets={props.targets}
+        enabled={props.singleKeys}
+        open={props.shortcutsOpen}
         onOpenChange={setShortcutsOpen}
         settings={settingsLink}
       />
       {waiting ? <GoHint targets={waiting} /> : null}
-    </SidebarProvider>
+    </>
   );
 }

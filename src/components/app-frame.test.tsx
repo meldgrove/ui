@@ -4,7 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { UIProvider, type Locale } from "../lib/i18n.tsx";
 import { visibleCrumbs, type Crumb } from "../frame/crumbs.tsx";
 import { shortcutClashes } from "../frame/keyboard.ts";
-import { activeHref, AppFrame, type AppFrameProps, type FrameLink, type NavGroup } from "./app-frame.tsx";
+import { activeHref } from "../frame/nav.ts";
+import { AppFrame, type AppFrameProps, type FrameLink, type NavGroup } from "./app-frame.tsx";
 import { KeyboardShortcutsCard } from "./settings-cards.tsx";
 
 const Link: FrameLink = ({ href, ...props }) => <a href={href} {...props} />;
@@ -54,7 +55,11 @@ function renderFrame(props: Partial<AppFrameProps> = {}, locale: Locale = "en") 
 
 const overview = () => screen.queryByRole("dialog", { name: "Keyboard shortcuts" });
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  // The sidebar keeps its state in a cookie; every test starts open.
+  document.cookie = "sidebar_state=; max-age=0; path=/";
+});
 afterEach(() => vi.restoreAllMocks());
 
 describe("activeHref", () => {
@@ -226,6 +231,87 @@ describe("AppFrame", () => {
     await user.click(screen.getByRole("button", { name: "Account of Jane Doe" }));
     await user.click(await screen.findByRole("menuitem", { name: "Sign out" }));
     expect(onSignOut).toHaveBeenCalled();
+  });
+
+  it("follows a changed href with G, not the first one", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    const frame = (href: string) => (
+      <AppFrame
+        app={{ name: "Handbook", icon: <svg /> }}
+        nav={[{ items: [{ label: "Space", href, shortcut: "s" }] }]}
+        pathname="/"
+        link={Link}
+        navigate={navigate}
+        user={{ name: "Jane Doe" }}
+        theme="system"
+        onThemeChange={() => undefined}
+        onSignOut={() => undefined}
+      >
+        <p>Page</p>
+      </AppFrame>
+    );
+    const { rerender } = render(frame("/s/old"));
+    rerender(frame("/s/new"));
+    await user.keyboard("gs");
+    expect(navigate).toHaveBeenCalledWith("/s/new");
+  });
+
+  it("never shows an answer to a search that was replaced", async () => {
+    const user = userEvent.setup();
+    const answers: ((results: { href: string; title: string }[]) => void)[] = [];
+    // A find that ignores the signal and answers only when the test says so.
+    const find = vi.fn(
+      () => new Promise<{ href: string; title: string }[]>((resolve) => answers.push(resolve)),
+    );
+    renderFrame({ search: { find } });
+    await user.keyboard("{Control>}k{/Control}");
+    // "la", then "lap", then "la" again: the first answer to "la" is outdated by then.
+    await user.keyboard("la");
+    await waitFor(() => expect(find).toHaveBeenCalledTimes(1));
+    await user.keyboard("p");
+    await waitFor(() => expect(find).toHaveBeenCalledTimes(2));
+    await user.keyboard("{Backspace}");
+    await waitFor(() => expect(find).toHaveBeenCalledTimes(3));
+    answers[0]!([{ href: "/old", title: "Outdated answer" }]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole("option", { name: /Outdated answer/ })).toBeNull();
+    answers[2]!([{ href: "/new", title: "Current answer" }]);
+    expect(await screen.findByRole("option", { name: /Current answer/ })).toBeInTheDocument();
+  });
+
+  it("leaves Ctrl+B to an editor that handles it", async () => {
+    const user = userEvent.setup();
+    renderFrame({
+      children: (
+        <div
+          contentEditable
+          suppressContentEditableWarning
+          aria-label="Editor"
+          role="textbox"
+          onKeyDown={(event) => {
+            if (event.ctrlKey && event.key === "b") event.preventDefault();
+          }}
+        >
+          Text
+        </div>
+      ),
+    });
+    const sidebar = () => document.querySelector("[data-slot=sidebar]");
+    await user.click(screen.getByRole("textbox", { name: "Editor" }));
+    await user.keyboard("{Control>}b{/Control}");
+    expect(sidebar()).toHaveAttribute("data-state", "expanded");
+    await user.click(screen.getByRole("button", { name: "Show or hide the sidebar" }));
+    expect(sidebar()).toHaveAttribute("data-state", "collapsed");
+  });
+
+  it("keeps a hidden sidebar out of the tab order", async () => {
+    const user = userEvent.setup();
+    renderFrame();
+    const main = () => screen.getByRole("navigation", { name: "Main" }).closest("[inert]");
+    expect(main()).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Show or hide the sidebar" }));
+    expect(main()).not.toBeNull();
   });
 
   it("speaks German", () => {

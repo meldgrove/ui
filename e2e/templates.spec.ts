@@ -65,7 +65,7 @@ test.describe("on a phone", () => {
     await expect(page).toHaveScreenshot("frame-phone-sidebar.png");
     await page.getByRole("link", { name: "My requests" }).click();
     await expect(page).toHaveURL(/#\/mine$/);
-    await expect(page.locator("[data-slot=sheet-content]")).toHaveCount(0);
+    await expect(page.locator("[data-mobile=true]")).toHaveCount(0);
   });
 
   test("sign-in page", async ({ page }) => {

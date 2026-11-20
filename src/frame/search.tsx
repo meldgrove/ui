@@ -143,7 +143,10 @@ function SearchPanel(props: Parameters<typeof SearchDialog>[0]) {
     const timer = window.setTimeout(() => {
       find
         .current?.(term, controller.signal)
-        .then((results) => setFound({ term, results }))
+        .then((results) => {
+          // An app's find may ignore the signal: an outdated answer still arrives.
+          if (!controller.signal.aborted) setFound({ term, results });
+        })
         .catch(() => {
           if (!controller.signal.aborted) setFound({ term, results: null });
         });
