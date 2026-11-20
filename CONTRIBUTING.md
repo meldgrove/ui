@@ -41,6 +41,19 @@ changes the look updates them, and the reviewer looks at the new images.
 
 ## Trying a change in an app
 
+A pushed branch, and so a pull request, can be installed in an app without
+a release, once the branch has `scripts/prepare.mjs` (rebase an older
+branch first). Replace `fix/my-change` with the branch:
+
+```sh
+cd handbook && npm install 'github:meldgrove/ui#fix/my-change' --workspace @handbook/web
+```
+
+npm downloads the branch, installs its dependencies and builds it
+(`scripts/prepare.mjs`); `@meldgrove/ui` then has version `0.0.0`. npm keeps
+the commit it found, so run the command again after new pushes. A commit
+works too (`#<sha>`). For changes not pushed yet:
+
 ```sh
 npm run build && npm pack           # meldgrove-ui-0.0.0.tgz
 cd ../handbook && npm install ../ui/meldgrove-ui-0.0.0.tgz --workspace @handbook/web
