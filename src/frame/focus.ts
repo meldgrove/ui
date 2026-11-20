@@ -15,7 +15,9 @@ export function useReturnFocus(open: boolean): (event: Event) => void {
   }, [open]);
   return (event) => {
     event.preventDefault();
-    const target = opener.current?.isConnected ? opener.current : document.getElementById("main");
+    // Nothing had focus (the body, on a fresh page) or it is gone: the page.
+    const opened = opener.current;
+    const target = opened?.isConnected && opened !== document.body ? opened : document.getElementById("main");
     target?.focus();
   };
 }

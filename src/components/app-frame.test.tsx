@@ -353,6 +353,13 @@ describe("AppFrame", () => {
     await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
     await user.keyboard("{Escape}");
     await waitFor(() => expect(field).toHaveFocus());
+
+    // Nothing had focus: the page gets it.
+    field.blur();
+    await user.keyboard("{Control>}k{/Control}");
+    await screen.findByRole("dialog", { name: "Search Helpdesk…" });
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.getByRole("main")).toHaveFocus());
   });
 
   it("speaks German", () => {
