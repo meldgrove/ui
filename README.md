@@ -23,8 +23,8 @@ npm install @meldgrove/ui
 ## React apps
 
 Peer dependencies: `react` and `react-dom` 19, `radix-ui`, `lucide-react`,
-`sonner`; `cmdk` (command), `react-day-picker` (calendar) and `recharts`
-(chart) only for those components.
+`sonner`; `cmdk` (command and the app frame's search), `react-day-picker`
+(calendar) and `recharts` (chart) only for those components.
 
 In the app's stylesheet, after Tailwind:
 
@@ -144,7 +144,10 @@ const [theme, setTheme] = useThemePreference();
 
 - **`link`:** the router's link. Next.js passes its `Link` as it is. Other
   routers use a small adapter that passes every other prop on to the `<a>`:
-  `const AppLink: FrameLink = ({ href, ...props }) => <Link to={href} {...props} />;`
+  `const AppLink: FrameLink = ({ href, ...props }) => <Link to={href} activeOptions={{ exact: true }} {...props} />;`
+  For TanStack Router, `exact` matters: otherwise it marks every link whose
+  path the address starts with as active (`aria-current="page"`), so a
+  breadcrumb's parent and the "/" item would be announced as the current page.
 - **`nav`:** the app filters it by role before it passes it in. The item
   whose `href` the path starts with is marked (the longest one; "/" and
   `exact` items only on themselves; `match` adds paths that belong to an

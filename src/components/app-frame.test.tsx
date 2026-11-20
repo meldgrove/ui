@@ -368,6 +368,36 @@ describe("AppFrame", () => {
     expect(screen.getByRole("button", { name: /^Jane Doe\s*jane@example\.org$/ })).toBeInTheDocument();
   });
 
+  it("marks only the last breadcrumb as the current page", () => {
+    renderFrame({ breadcrumbs: [{ label: "Administration" }, { label: "Status" }] });
+    const crumbs = screen.getByRole("navigation", { name: "Breadcrumbs" });
+    expect(within(crumbs).getByText("Administration")).not.toHaveAttribute("aria-current");
+    expect(within(crumbs).getByText("Status")).toHaveAttribute("aria-current", "page");
+  });
+
+  it("tells pages with the same label apart in the search", async () => {
+    const user = userEvent.setup();
+    renderFrame({
+      nav: [
+        { label: "Find", items: [{ label: "People", href: "/people" }] },
+        { label: "Administration", items: [{ label: "People", href: "/admin/people" }] },
+      ],
+    });
+    await user.keyboard("{Control>}k{/Control}");
+    await user.keyboard("peo");
+    const dialog = await screen.findByRole("dialog", { name: "Search Helpdesk…" });
+    expect(within(dialog).getByRole("option", { name: /People\s*Find/ })).toBeInTheDocument();
+    expect(within(dialog).getByRole("option", { name: /People\s*Administration/ })).toBeInTheDocument();
+  });
+
+  it("speaks German in its dialogs too", async () => {
+    const user = userEvent.setup();
+    renderFrame({}, "de");
+    await user.keyboard("{Control>}/{/Control}");
+    const dialog = await screen.findByRole("dialog", { name: "Tastenkürzel" });
+    expect(within(dialog).getByRole("button", { name: "Schließen" })).toBeInTheDocument();
+  });
+
   it("speaks German", () => {
     renderFrame({}, "de");
     expect(screen.getByText("Zum Inhalt springen")).toBeInTheDocument();
