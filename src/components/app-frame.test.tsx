@@ -329,6 +329,18 @@ describe("AppFrame", () => {
     expect(sidebar()).toHaveAttribute("data-state", "collapsed");
   });
 
+  it("lets the app decide whether the sidebar is open", async () => {
+    const user = userEvent.setup();
+    const onSidebarOpenChange = vi.fn();
+    renderFrame({ sidebarOpen: false, onSidebarOpenChange });
+    const sidebar = () => document.querySelector("[data-slot=sidebar]");
+    expect(sidebar()).toHaveAttribute("data-state", "collapsed");
+    await user.click(screen.getByRole("button", { name: "Show or hide the sidebar" }));
+    expect(onSidebarOpenChange).toHaveBeenLastCalledWith(true);
+    // The app has not opened it yet.
+    expect(sidebar()).toHaveAttribute("data-state", "collapsed");
+  });
+
   it("keeps a hidden sidebar out of the tab order", async () => {
     const user = userEvent.setup();
     renderFrame();

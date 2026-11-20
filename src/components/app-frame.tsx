@@ -117,6 +117,13 @@ export type AppFrameProps = {
   shortcuts?: boolean;
   /** Next.js: the cookie `sidebar_state`, read on the server. Default: that cookie, read in the browser. */
   defaultSidebarOpen?: boolean;
+  /**
+   * For an app that decides itself whether the sidebar is open on wide screens
+   * (e.g. folded on article pages). ⌘B or Ctrl+B and the toggle then call
+   * `onSidebarOpenChange`. Default: the frame decides, from the cookie.
+   */
+  sidebarOpen?: boolean;
+  onSidebarOpenChange?: (open: boolean) => void;
   children: ReactNode;
 };
 
@@ -386,7 +393,11 @@ export function AppFrame(props: AppFrameProps) {
   }, [signature]);
 
   return (
-    <SidebarProvider defaultOpen={defaultOpen}>
+    <SidebarProvider
+      defaultOpen={defaultOpen}
+      open={props.sidebarOpen}
+      onOpenChange={props.onSidebarOpenChange}
+    >
       <a
         href="#main"
         onClick={(event: MouseEvent<HTMLAnchorElement>) => {
