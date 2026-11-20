@@ -100,7 +100,8 @@ palette the apps used so far.
 The app serves the four admin routes of the updater contract (status,
 `check`, `install`, `channel`). The components do the rest: polling, the
 popover, the confirmation, following an installation through the restart,
-reloading when the new version answers, and stopping when the session ends.
+reloading every page of the app when the new version answers, and stopping
+when the session ends.
 
 ```tsx
 import { UpdateButton, UpdatesProvider, UpdatesSettingsCard } from "@meldgrove/ui/updates";
@@ -121,6 +122,14 @@ import { UpdateButton, UpdatesProvider, UpdatesSettingsCard } from "@meldgrove/u
   and `<url>/channel` (a trailing slash carries over).
 - `project` names the updater's systemd unit in the hint after 15 minutes
   (`journalctl -u meldgrove-updater-<project>`).
+- No page keeps old code after an update. The page that followed the
+  installation tells the app's other pages in the browser
+  (`BroadcastChannel` `meldgrove.updates.<project>`), and they reload with
+  it. A page that missed it (asleep, in another browser, an automatic
+  install) reloads once the update service answers without an installation
+  and the app names another version than in the page's first status.
+  Unsaved input is lost on that reload, unless the app guards it with a
+  `beforeunload` handler.
 - 401, 403, 404 (what the routes answer non-admins) and sign-in pages end
   the session for the page: no more automatic requests. `onSignedOut(reason)`
   lets the app react: `"signed-out"` (401 or a sign-in page; for example,

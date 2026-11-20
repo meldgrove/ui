@@ -12,6 +12,7 @@ import {
   panelState,
   reconcileDeadline,
   SLOW_AFTER_MS,
+  staleVersion,
   startAttempt,
   statusTimeout,
   unconfirmedEnd,
@@ -46,6 +47,8 @@ export const INSTALL_TIMEOUT_MS = 15_000;
 export const POST_TIMEOUT_MS = 45_000;
 /** The page reloads this long after the new version answered. */
 export const RELOAD_DELAY_MS = 1_500;
+/** What a page tells the app's other pages in this browser (BroadcastChannel `meldgrove.updates.<project>`). */
+export type UpdatesMessage = { type: "updated"; version: string };
 /** How often the snapshot's `now` moves, for relative times. */
 const TICK_MS = 30_000;
 
@@ -77,7 +80,7 @@ export type UpdatesControllerOptions = {
    * (signed in, but no longer an app admin).
    */
   onSignedOut?: (reason: SignedOutReason) => void;
-  /** Reloads the page once the new version answers. */
+  /** Reloads the page once the new version answers (on this page or another of the app). */
   reload?: () => void;
   /** The clock (epoch ms); for tests. */
   now?: () => number;
@@ -161,6 +164,11 @@ const signedOutReason = (status: number): SignedOutReason => (status === 401 ? "
  * the page when the new version answers, and stops every automatic request
  * once the session ended. Never checks by itself. The React components and
  * the standalone element render its snapshot.
+ *
+ * No page keeps old code after an update: the page that saw an installation
+ * finish tells the app's other pages in this browser, and they reload too; a
+ * page that missed it (asleep, in another browser, an automatic install)
+ * reloads once a status names another app version than the page's first.
  */
 export class UpdatesController {
   appName: string;
@@ -184,6 +192,14 @@ export class UpdatesController {
   private statusAbort: AbortController | null = null;
 
   private response: UpdatesResponse | undefined;
+  /**
+   * The app's version in the page's first answer: the code this page runs.
+   * Never from `initialResponse`: a page served from a cache would reload
+   * again and again.
+   */
+  private pageVersion: string | null = null;
+  /** Tells the app's other pages in this browser that an installation is done, and hears theirs. */
+  private channel: BroadcastChannel | null = null;
   /** When the latest status request ended, and whether it failed (no status, or not reachable). */
   private lastPoll: { at: number; failed: boolean; error: string | null } | null = null;
   private pending: PendingInstall | null = null;
@@ -339,6 +355,7 @@ export class UpdatesController {
     window.addEventListener("focus", this.onFocus);
     window.addEventListener("online", this.onFocus);
     document.addEventListener("visibilitychange", this.onVisibility);
+    this.openChannel();
     this.tickTimer = setInterval(() => this.emit(), TICK_MS);
     void this.fetchStatus();
   }
@@ -346,6 +363,8 @@ export class UpdatesController {
   /** Stops every timer and listener (also a pending reload); `start` resumes. */
   dispose() {
     this.started = false;
+    this.channel?.close();
+    this.channel = null;
     window.removeEventListener("focus", this.onFocus);
     window.removeEventListener("online", this.onFocus);
     document.removeEventListener("visibilitychange", this.onVisibility);
@@ -364,6 +383,47 @@ export class UpdatesController {
   private onVisibility = () => {
     if (document.visibilityState === "visible") this.onFocus();
   };
+
+  /** The channel of the app's pages in this browser; without BroadcastChannel, the version check still reloads them. */
+  private openChannel() {
+    if (this.channel || typeof BroadcastChannel === "undefined") return;
+    try {
+      this.channel = new BroadcastChannel(`meldgrove.updates.${this.project}`);
+      this.channel.onmessage = this.onMessage;
+    } catch {
+      this.channel = null;
+    }
+  }
+
+  /**
+   * Another page of the app saw an installation finish: reload once. Also a
+   * page whose first status already named the version: it may have loaded
+   * the old code just before the switch.
+   */
+  private onMessage = (event: MessageEvent<unknown>) => {
+    const message = event.data as Partial<UpdatesMessage> | null;
+    if (message?.type !== "updated" || typeof message.version !== "string") return;
+    this.reloadInto(message.version);
+  };
+
+  /** Tells the app's other pages in this browser that it runs `version` now. */
+  private broadcast(version: string) {
+    const message: UpdatesMessage = { type: "updated", version };
+    this.channel?.postMessage(message);
+  }
+
+  /**
+   * The app runs `version` now: says so and reloads the page once, after
+   * 1.5 s (a timer `dispose` clears). Not after `dispose`: an answer still
+   * on its way does nothing.
+   */
+  private reloadInto(version: string) {
+    if (this.reloading || !this.started) return;
+    this.reloading = true;
+    this.setPending(null);
+    this.notify({ kind: "success", title: this.t("updated", { version }) });
+    this.reloadTimer = setTimeout(() => this.reloadFn(), RELOAD_DELAY_MS);
+  }
 
   /** Shows a message the way the page shows the controller's own (toast). */
   notify(notice: Notice) {
@@ -522,24 +582,32 @@ export class UpdatesController {
   /** A new status, from a status request (sent at `sentAt`) or from the answer of a POST. */
   private receive(response: UpdatesResponse, sentAt: number) {
     this.response = response;
+    this.pageVersion ??= response.app.version;
     this.lastPoll = { at: this.clock(), failed: !response.updater, error: response.error };
     this.follow(response, sentAt);
     this.emit();
   }
 
-  /** Confirms this tab's attempt, adopts a reported installation, and ends it once its result is known. */
+  /**
+   * Confirms this tab's attempt, adopts a reported installation, and ends it
+   * once its result is known; done reloads every page of the app in this
+   * browser. Without an installation to follow, reloads a page whose code is
+   * older than the app's.
+   */
   private follow(response: UpdatesResponse, sentAt: number) {
     if (this.reloading) return;
     const now = this.clock();
     const pending = this.pending;
     const followed = followStatus(pending, response, now, this.ignored, sentAt);
-    if (!followed) return;
+    if (!followed) {
+      const version = staleVersion(this.pageVersion, response);
+      if (version) this.reloadInto(version);
+      return;
+    }
     const result = installOutcome(followed, response, now);
     if (result === "done") {
-      this.reloading = true;
-      this.setPending(null);
-      this.notify({ kind: "success", title: this.t("updated", { version: followed.version }) });
-      this.reloadTimer = setTimeout(() => this.reloadFn(), RELOAD_DELAY_MS);
+      this.broadcast(followed.version);
+      this.reloadInto(followed.version);
     } else if (result === "failed") {
       this.recent = response.updater?.last ?? null;
       this.open = true;

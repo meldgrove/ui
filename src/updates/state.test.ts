@@ -19,6 +19,7 @@ import {
   panelState,
   reconcileDeadline,
   replacedFailure,
+  staleVersion,
   startAttempt,
   statusTimeout,
   unconfirmedEnd,
@@ -320,6 +321,30 @@ describe("installOutcome", () => {
     const running = after({ installing: installing("0.2.1") });
     expect(installOutcome(pending, running, T0 + SLOW_AFTER_MS)).toBe("waiting");
     expect(installOutcome(pending, undefined, T0 + SLOW_AFTER_MS + 1)).toBe("slow");
+  });
+});
+
+describe("staleVersion", () => {
+  const installing = {
+    version: "0.2.1",
+    startedAt: "2026-11-19T10:00:00Z",
+    manual: false,
+    stage: "starting" as const,
+  };
+
+  it("names the app's version when the page was loaded from another one and nothing installs", () => {
+    expect(staleVersion("0.2.0", response(status({ installed: "0.2.1" }), "0.2.1"))).toBe("0.2.1");
+    // Back to the version before (a rollback after the page loaded the new one): old code too.
+    expect(staleVersion("0.2.1", response(status()))).toBe("0.2.0");
+  });
+
+  it("is null for the page's own version, while an installation runs or may, and without versions", () => {
+    expect(staleVersion("0.2.0", response(status()))).toBeNull();
+    expect(staleVersion("0.2.0", response(status({ installing }), "0.2.1"))).toBeNull();
+    // The update service restarts with the app during an installation, which may still roll back.
+    expect(staleVersion("0.2.0", response(null, "0.2.1"))).toBeNull();
+    expect(staleVersion(null, response(status(), "0.2.1"))).toBeNull();
+    expect(staleVersion("0.2.0", response(status(), null))).toBeNull();
   });
 });
 

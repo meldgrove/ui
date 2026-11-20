@@ -72,3 +72,32 @@ export function fakeTransport(handlers: Partial<Record<UpdatesRequest["action"],
 }
 
 export const ok = (data: unknown, status = 200): UpdatesAnswer => ({ status, data });
+
+/**
+ * A BroadcastChannel for the pages of one test file: delivers to the other
+ * open channels of the same name after the current task, as browsers do.
+ * Node's own would also reach other test files' pages.
+ */
+export class FakeBroadcastChannel {
+  static readonly open = new Set<FakeBroadcastChannel>();
+  onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
+
+  constructor(readonly name: string) {
+    FakeBroadcastChannel.open.add(this);
+  }
+
+  postMessage(data: unknown) {
+    if (!FakeBroadcastChannel.open.has(this))
+      throw new DOMException("Channel is closed", "InvalidStateError");
+    for (const other of FakeBroadcastChannel.open) {
+      if (other === this || other.name !== this.name) continue;
+      queueMicrotask(() => {
+        if (FakeBroadcastChannel.open.has(other)) other.onmessage?.(new MessageEvent("message", { data }));
+      });
+    }
+  }
+
+  close() {
+    FakeBroadcastChannel.open.delete(this);
+  }
+}

@@ -363,6 +363,21 @@ export function installOutcome(
   return now - pending.startedAt > SLOW_AFTER_MS ? "slow" : "waiting";
 }
 
+/**
+ * The version the app runs now, when it is not the one this page was loaded
+ * from (`pageVersion`: the app's version in the page's first status) and the
+ * update service reports no installation: the page runs old code and
+ * reloads. Another tab, another administrator or an automatic install
+ * updated the app. Null otherwise: in development (no app version), and
+ * without update service (it restarts during an installation, which may
+ * still roll back).
+ */
+export function staleVersion(pageVersion: string | null, response: UpdatesResponse): string | null {
+  const version = response.app.version;
+  if (pageVersion === null || version === null || version === pageVersion) return null;
+  return response.updater && !response.updater.installing ? version : null;
+}
+
 /** How long a status request may take. */
 export const STATUS_TIMEOUT_MS = 10_000;
 

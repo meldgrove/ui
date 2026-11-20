@@ -444,6 +444,153 @@ describe("UpdatesController", () => {
     controller.dispose();
   });
 
+  it("tells the app's other pages in this browser when it is done, and they reload too", async () => {
+    let current = response(status({ available: release("0.2.1") }));
+    const transport = fakeTransport({
+      status: () => ok(current),
+      install: () => {
+        current = response(
+          status({ installing: { version: "0.2.1", startedAt: iso(T0), manual: true, stage: "pulling" } }),
+        );
+        return ok(current, 202);
+      },
+    });
+    const page = setup(transport);
+    const other = setup(transport);
+    page.controller.start();
+    other.controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    // A page whose first status named the new version may still have loaded the old code.
+    const fresh = setup(
+      fakeTransport({ status: () => ok(response(status({ installed: "0.2.1" }), "0.2.1")) }),
+    );
+    fresh.controller.start();
+
+    await page.controller.install(release("0.2.1"));
+    current = response(
+      status({
+        installed: "0.2.1",
+        last: { version: "0.2.1", result: "installed", message: null, finishedAt: iso(T0 + 1_000) },
+      }),
+      "0.2.1",
+    );
+    await vi.advanceTimersByTimeAsync(INSTALL_INTERVAL_MS);
+    // The other page asks only every 5 minutes; the message reaches it at once.
+    expect(transport.count("status")).toBe(3);
+    expect(other.notices.at(-1)).toEqual({ kind: "success", title: "Updated to 0.2.1" });
+    expect(other.controller.getSnapshot().pending).toBeNull();
+    await vi.advanceTimersByTimeAsync(RELOAD_DELAY_MS);
+    expect(page.reload).toHaveBeenCalledOnce();
+    expect(other.reload).toHaveBeenCalledOnce();
+    expect(fresh.reload).toHaveBeenCalledOnce();
+    for (const { controller } of [page, other, fresh]) controller.dispose();
+  });
+
+  it("reloads a page that missed an installation once a status names another app version", async () => {
+    let current = response(status());
+    const transport = fakeTransport({ status: () => ok(current) });
+    const { controller, notices, reload } = setup(transport);
+    controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    // In development (no app version) and on the page's own version, nothing happens.
+    current = response(status(), null);
+    await vi.advanceTimersByTimeAsync(NORMAL_INTERVAL_MS);
+    current = response(status());
+    await vi.advanceTimersByTimeAsync(NORMAL_INTERVAL_MS);
+    expect(notices).toEqual([]);
+
+    // Installed elsewhere (another browser, an automatic install) while this page slept.
+    current = response(
+      status({
+        installed: "0.2.1",
+        last: { version: "0.2.1", result: "installed", message: null, finishedAt: iso(T0 + 1_000) },
+      }),
+      "0.2.1",
+    );
+    await vi.advanceTimersByTimeAsync(61_000);
+    window.dispatchEvent(new Event("focus"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(notices).toEqual([{ kind: "success", title: "Updated to 0.2.1" }]);
+    expect(reload).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(RELOAD_DELAY_MS);
+    expect(reload).toHaveBeenCalledOnce();
+    controller.dispose();
+  });
+
+  it("takes the page's version from the first answer, not from a status rendered into the page", async () => {
+    const transport = fakeTransport({ status: () => ok(response(status({ installed: "0.2.1" }), "0.2.1")) });
+    const reload = vi.fn();
+    const controller = new UpdatesController({
+      transport,
+      appName: "Meldgrove Example",
+      project: "example",
+      storage,
+      // A page from a cache: reloading would bring the same page back.
+      initialResponse: response(status()),
+      reload,
+    });
+    controller.start();
+    await vi.advanceTimersByTimeAsync(NORMAL_INTERVAL_MS + RELOAD_DELAY_MS);
+    expect(transport.count("status")).toBe(2);
+    expect(reload).not.toHaveBeenCalled();
+    controller.dispose();
+  });
+
+  it("does not reload for a new app version while an installation it stopped waiting for still runs", async () => {
+    const installing = { version: "0.2.1", startedAt: iso(T0), manual: true, stage: "starting" as const };
+    let current = response(status({ installing }));
+    const transport = fakeTransport({ status: () => ok(current) });
+    const { controller, reload } = setup(transport);
+    controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(controller.getSnapshot().pending).toMatchObject({ version: "0.2.1" });
+    controller.stopWaiting();
+
+    // On a server the new version answers before the result; it may still roll back.
+    current = response(status({ installing }), "0.2.1");
+    await vi.advanceTimersByTimeAsync(NORMAL_INTERVAL_MS + RELOAD_DELAY_MS);
+    expect(reload).not.toHaveBeenCalled();
+
+    current = response(status({ installed: "0.2.1" }), "0.2.1");
+    await vi.advanceTimersByTimeAsync(NORMAL_INTERVAL_MS + RELOAD_DELAY_MS);
+    expect(reload).toHaveBeenCalledOnce();
+    controller.dispose();
+  });
+
+  it("works without BroadcastChannel", async () => {
+    vi.stubGlobal("BroadcastChannel", undefined);
+    try {
+      let current = response(status({ available: release("0.2.1") }));
+      const transport = fakeTransport({ status: () => ok(current), install: () => ok(current, 202) });
+      const { controller, reload } = setup(transport);
+      controller.start();
+      await vi.advanceTimersByTimeAsync(0);
+      await controller.install(release("0.2.1"));
+      current = response(status({ installed: "0.2.1" }), "0.2.1");
+      await vi.advanceTimersByTimeAsync(INSTALL_INTERVAL_MS + RELOAD_DELAY_MS);
+      expect(reload).toHaveBeenCalledOnce();
+      controller.dispose();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does nothing with a status that arrives after it was disposed", async () => {
+    let answer: (value: ReturnType<typeof ok>) => void = () => undefined;
+    const transport = fakeTransport({ status: () => ok(response(status())) });
+    const { controller, notices, reload } = setup(transport);
+    controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    transport.on("status", () => new Promise((resolve) => (answer = resolve)));
+    await vi.advanceTimersByTimeAsync(NORMAL_INTERVAL_MS);
+    controller.dispose();
+    answer(ok(response(status({ installed: "0.2.1" }), "0.2.1")));
+    await vi.advanceTimersByTimeAsync(RELOAD_DELAY_MS * 2);
+    expect(notices).toEqual([]);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
   it("does not reload after it was disposed", async () => {
     let current = response(status({ available: release("0.2.1") }));
     const transport = fakeTransport({ status: () => ok(current), install: () => ok(current, 202) });
