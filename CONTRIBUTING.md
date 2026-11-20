@@ -54,6 +54,7 @@ A staged version is not public yet. A maintainer approves it with 2FA, and
 only then do the apps get it:
 
 ```sh
+npm login                  # once, if npm whoami says you are not logged in
 npm stage list @meldgrove/ui
 npm stage approve <id>     # or reject <id>
 ```
