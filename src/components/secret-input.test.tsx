@@ -3,6 +3,7 @@ import { useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { UIProvider } from "../lib/i18n.tsx";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./dialog.tsx";
 import { SecretInput } from "./secret-input.tsx";
 import { initialSecret, SecretField } from "./secret-field.tsx";
 
@@ -36,6 +37,26 @@ describe("SecretInput", () => {
     expect(writeText).toHaveBeenCalledWith("tok-456");
     expect(screen.getByLabelText("Token")).toHaveAttribute("type", "password");
     expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
+  });
+
+  it("leaves a hidden read-only secret out of the tab order, so a dialog does not select it", async () => {
+    const user = userEvent.setup();
+    render(
+      <Dialog open>
+        <DialogContent>
+          <DialogTitle>Copy your token now</DialogTitle>
+          <DialogDescription>Shown once.</DialogDescription>
+          <SecretInput aria-label="Token" value="tok-456" readOnly copyable />
+        </DialogContent>
+      </Dialog>,
+    );
+    const input = screen.getByLabelText("Token");
+    expect(input).toHaveAttribute("tabindex", "-1");
+    expect(input).not.toHaveFocus();
+    expect(screen.getByRole("button", { name: "Show" })).toHaveFocus();
+
+    await user.click(screen.getByRole("button", { name: "Show" }));
+    expect(input).not.toHaveAttribute("tabindex");
   });
 
   it("copies what an uncontrolled field holds", async () => {

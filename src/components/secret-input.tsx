@@ -48,6 +48,10 @@ export function SecretInput({
         {...props}
         id={inputId}
         type={shown ? "text" : "password"}
+        // Nobody can read or copy a hidden read-only secret from the field (browsers block copying
+        // from password fields). Without a tab stop, a dialog focuses the buttons instead of
+        // selecting the dots.
+        tabIndex={props.readOnly && !shown ? -1 : props.tabIndex}
         className={inputClassName}
       />
       <InputGroupAddon align="inline-end">
