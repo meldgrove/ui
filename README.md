@@ -171,6 +171,10 @@ const [theme, setTheme] = useThemePreference();
   it in a client component of the app; the server layout passes data only,
   with `defaultSidebarOpen` from the cookie `sidebar_state`. Vite apps leave
   that out; the frame reads the cookie.
+- **`sidebarOpen`:** for an app that decides itself whether the sidebar is
+  open on wide screens, e.g. folded on article pages. ⌘B or Ctrl+B and the
+  toggle call `onSidebarOpenChange`; the app keeps the choice. Phones are
+  not affected: there the sidebar is a sheet.
 - `SidebarInset` is inside the frame; the page brings its `Page` (below), not
   another `<main>`.
 
