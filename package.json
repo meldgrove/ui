@@ -78,6 +78,7 @@
   "scripts": {
     "dev": "vite --config demo/vite.config.ts",
     "build": "node scripts/build.mjs",
+    "prepare": "node scripts/prepare.mjs",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
