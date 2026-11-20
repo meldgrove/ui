@@ -1,9 +1,10 @@
 # Maintainers start a release in Actions > Release > Run workflow (CONTRIBUTING.md,
 # Releases). It refuses unless started from main, CI passed for the commit and
 # something changed since the last release; raises the latest vX.Y.Z tag by the
-# chosen part (a pull request labelled `breaking` needs a new series); publishes
-# the package to npm with provenance; then pushes only the tag and creates the
-# GitHub Release. package.json stays at 0.0.0. A dry run publishes nothing.
+# chosen part (a pull request labelled `breaking` needs a new series); stages
+# the package on npm with provenance (a maintainer approves it with 2FA before
+# it is public); then pushes only the tag and creates the GitHub Release.
+# package.json stays at 0.0.0. A dry run stages nothing.
 #
 # npm: trusted publishing (OIDC) from this workflow. The secret NPM_TOKEN is only
 # for a first publish before the trusted publisher exists; delete it afterwards.
@@ -133,17 +134,17 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: npm version "$VERSION" --no-git-tag-version
 
-      - name: Publish to npm
+      - name: Stage on npm
         env:
           DRY_RUN: ${{ inputs.dry_run }}
           # Empty once trusted publishing is set up: npm then uses OIDC.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if [ "$DRY_RUN" = true ]; then
-            npm publish --access public --dry-run
+            npm stage publish --access public --dry-run
           else
             # Why npm refused the trusted publisher (OIDC) is only in its debug log.
-            npm publish --access public --provenance || {
+            npm stage publish --access public --provenance || {
               grep -h -i "oidc" "$HOME"/.npm/_logs/*-debug-0.log || true
               exit 1
             }
@@ -163,4 +164,4 @@ jobs:
           args=(--title "$TAG" --generate-notes --verify-tag)
           if [ -n "$PREVIOUS" ]; then args+=(--notes-start-tag "$PREVIOUS"); fi
           gh release create "$TAG" "${args[@]}"
-          echo "Published https://www.npmjs.com/package/@meldgrove/ui/v/${TAG#v}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Staged @meldgrove/ui ${TAG#v}. It is public once a maintainer approves it (2FA): \`npm stage list @meldgrove/ui\`, then \`npm stage approve <id>\`." >> "$GITHUB_STEP_SUMMARY"
