@@ -36,6 +36,7 @@
     "./tokens.css": "./dist/tokens.css",
     "./theme.css": "./dist/theme.css",
     "./standalone/meldgrove-updates.js": "./dist/standalone/meldgrove-updates.js",
+    "./standalone/meldgrove-secret-input.js": "./dist/standalone/meldgrove-secret-input.js",
     "./updates": {
       "types": "./dist/updates/index.d.ts",
       "default": "./dist/updates/index.js"

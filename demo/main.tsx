@@ -15,6 +15,7 @@ import { Label } from "../src/components/label.tsx";
 import { Pager } from "../src/components/pager.tsx";
 import { RadioGroup, RadioGroupItem } from "../src/components/radio-group.tsx";
 import { initialSecret, SecretField } from "../src/components/secret-field.tsx";
+import { SecretInput } from "../src/components/secret-input.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../src/components/select.tsx";
 import { Toaster } from "../src/components/sonner.tsx";
 import { EmptyState, ErrorState, LoadingState } from "../src/components/states.tsx";
@@ -269,6 +270,10 @@ function Demo() {
                   <SelectItem value="programs">Programs</SelectItem>
                 </SelectContent>
               </Select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="password">Password</FieldLabel>
+              <SecretInput id="password" defaultValue="correct horse" autoComplete="off" />
             </Field>
             <Field>
               <FieldLabel htmlFor="note">Note</FieldLabel>

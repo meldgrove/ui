@@ -6,6 +6,10 @@ import { expect, test } from "@playwright/test";
  * page without React, as the Django apps use them.
  */
 const bundle = readFileSync(new URL("../dist/standalone/meldgrove-updates.js", import.meta.url), "utf8");
+const secretBundle = readFileSync(
+  new URL("../dist/standalone/meldgrove-secret-input.js", import.meta.url),
+  "utf8",
+);
 
 const status = {
   app: { version: "0.2.0" },
@@ -45,6 +49,9 @@ const css = (
 ) => `body { font-family: Georgia, serif; margin: 0; background: ${theme === "dark" ? "#111" : "#f6f7f5"}; }
 header { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid #ccc; }
 main { max-width: 720px; margin: 24px auto; }
+label { display: block; margin-bottom: 4px; }
+meldgrove-secret-input { max-width: 360px; }
+input { font: inherit; padding: 6px 10px; border: 1px solid #bbb; border-radius: 6px; }
 /* The app's own accent reaches the elements. */
 :root { --mg-accent: oklch(0.5 0.13 160); --mg-accent-foreground: oklch(0.985 0 0); }
 .dark { --mg-accent: oklch(0.75 0.13 160); --mg-accent-foreground: oklch(0.2 0.02 160); }`;
@@ -52,10 +59,13 @@ main { max-width: 720px; margin: 24px auto; }
 const page = (theme: string) => `<!doctype html>
 <html lang="en"${theme === "dark" ? ' class="dark"' : ""}><head><meta charset="utf-8">
 <link rel="stylesheet" href="/static/page.css">
-<script type="module" src="/static/meldgrove-updates.js"></script></head>
+<script type="module" src="/static/meldgrove-updates.js"></script>
+<script type="module" src="/static/meldgrove-secret-input.js"></script></head>
 <body><header>Admin
 <meldgrove-update-button url="/admin/updates/" app-name="Meldgrove IAM" project="iam" csrf-token="test-token" guide-url="https://github.com/meldgrove/iam"></meldgrove-update-button>
 </header><main>
+<p><label for="id_token">Bearer token</label>
+<meldgrove-secret-input><input type="password" name="token" id="id_token" value="tok-123"></meldgrove-secret-input></p>
 <meldgrove-updates-settings url="/admin/updates/" app-name="Meldgrove IAM" project="iam" csrf-token="test-token"></meldgrove-updates-settings>
 </main></body></html>`;
 
@@ -76,6 +86,9 @@ for (const theme of ["light", "dark"]) {
     );
     await browser.route("http://app.test/static/meldgrove-updates.js", (route) =>
       route.fulfill({ contentType: "text/javascript", body: bundle }),
+    );
+    await browser.route("http://app.test/static/meldgrove-secret-input.js", (route) =>
+      route.fulfill({ contentType: "text/javascript", body: secretBundle }),
     );
     await browser.route("http://app.test/admin/updates/**", (route) => {
       const request = route.request();
@@ -112,6 +125,14 @@ for (const theme of ["light", "dark"]) {
     await browser.locator("meldgrove-update-button").getByRole("button", { name: "Check now" }).click();
     await expect.poll(() => posts.length).toBe(1);
     expect(posts[0]).toEqual({ url: "http://app.test/admin/updates/check/", csrf: "test-token" });
+    // The password field shows its value only on request (with the popover closed).
+    await browser.keyboard.press("Escape");
+    const token = browser.getByLabel("Bearer token");
+    await expect(token).toHaveAttribute("type", "password");
+    await browser.getByRole("button", { name: "Show", exact: true }).click();
+    await expect(token).toHaveAttribute("type", "text");
+    await expect(token).toHaveValue("tok-123");
+
     // Nothing the policy refused, nothing that failed.
     expect(errors).toEqual([]);
   });

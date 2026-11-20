@@ -3,8 +3,9 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 /**
- * The standalone update button and settings (custom elements with React and
- * the styles inside) for apps without React: one ES module.
+ * The standalone elements for apps without React, one ES module each: the
+ * update button and settings (React and the styles inside), and the eye
+ * button of a password field (no React).
  */
 /**
  * Sonner adds its CSS to the page's <head> when it loads. The elements bring
@@ -31,9 +32,12 @@ export default defineConfig({
     emptyOutDir: true,
     copyPublicDir: false,
     lib: {
-      entry: "src/updates/element.tsx",
+      entry: {
+        "meldgrove-updates": "src/updates/element.tsx",
+        "meldgrove-secret-input": "src/elements/secret-input.ts",
+      },
       formats: ["es"],
-      fileName: () => "meldgrove-updates.js",
+      fileName: (_format, name) => `${name}.js`,
     },
     minify: true,
     rolldownOptions: { output: { minify: true } },

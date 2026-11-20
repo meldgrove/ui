@@ -2,7 +2,7 @@
 
 import { Field, FieldDescription, FieldError, FieldLabel } from "./field.tsx";
 import { Button } from "./button.tsx";
-import { Input } from "./input.tsx";
+import { SecretInput } from "./secret-input.tsx";
 import { Badge } from "./badge.tsx";
 import { KeyRound } from "lucide-react";
 import { defineMessages, useT } from "../lib/i18n.tsx";
@@ -109,12 +109,11 @@ export function SecretField(props: {
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <Input
+          <SecretInput
             id={props.id}
-            type="password"
             autoComplete="off"
-            spellCheck={false}
-            className="min-w-0 flex-1 font-mono"
+            className="min-w-0 flex-1"
+            inputClassName="font-mono"
             value={value.value}
             placeholder={props.placeholder}
             aria-invalid={props.error ? true : undefined}

@@ -13,8 +13,8 @@ npm install @meldgrove/ui
   (`styles.css`), light and dark, with one accent color per app if wanted.
 - **Components:** the [shadcn/ui](https://ui.shadcn.com) components of the
   apps (style `new-york`, Radix UI, lucide icons), plus page states, a
-  confirm dialog, a copy button, a pager and a write-only secret field.
-  English and German.
+  confirm dialog, a copy button, a pager, a secret input and a write-only
+  secret field. English and German.
 - **Update button:** the admin's update button and the "Updates" settings of
   every Meldgrove app, following the contract of the
   [Meldgrove Updater](https://github.com/meldgrove/updater#the-apps-update-button).
@@ -59,6 +59,26 @@ import { UIProvider } from "@meldgrove/ui/i18n";
 
 <UIProvider locale="de">{children}</UIProvider>;
 ```
+
+### Secrets
+
+Every field for a secret (password, API key, token, private key) is hidden
+until the person shows it with the eye button. Apps use `SecretInput` for it,
+never an `Input` or `Textarea`:
+
+```tsx
+import { SecretInput } from "@meldgrove/ui/secret-input";
+
+<SecretInput id="password" autoComplete="current-password" value={password} onChange={…} />
+// A secret shown once after it was created: the copy button copies it hidden.
+<SecretInput aria-label="Token" value={token} readOnly copyable />
+```
+
+It takes the props of an `<input>` (not `type`); `className` styles the box,
+`inputClassName` the text field. A pasted multi-line value, such as the JSON
+key of a Google service account, loses its line breaks, which JSON does not
+need. `SecretField` (`@meldgrove/ui/secret-field`) builds on it for secrets
+the server keeps write-only: keep, replace or remove.
 
 ### Toasts
 
@@ -333,6 +353,21 @@ The elements work under a strict Content Security Policy (`style-src
 An app's accent (`--mg-accent` on `:root`) reaches them. The React peer
 dependencies are optional, so `npm install @meldgrove/ui` in an app without
 React installs only a few small packages.
+
+`dist/standalone/meldgrove-secret-input.js` (about 3 kB, no React) adds the
+eye button to a password field, as `SecretInput` has it. The field stays a
+plain input of the form:
+
+```html
+<script type="module" src="/static/meldgrove-secret-input.js"></script>
+
+<meldgrove-secret-input locale="en">
+  <input type="password" name="token" id="id_token" autocomplete="off" />
+</meldgrove-secret-input>
+```
+
+It hides the field even when the markup says `type="text"`, and takes its
+colors from `tokens.css`.
 
 Apps without Tailwind can use `tokens.css` for the same colors. It switches
 to dark with the class `dark` on `<html>`; an app that follows the device
