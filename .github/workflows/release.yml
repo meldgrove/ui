@@ -142,7 +142,11 @@ jobs:
           if [ "$DRY_RUN" = true ]; then
             npm publish --access public --dry-run
           else
-            npm publish --access public --provenance
+            # Why npm refused the trusted publisher (OIDC) is only in its debug log.
+            npm publish --access public --provenance || {
+              grep -h -i "oidc" "$HOME"/.npm/_logs/*-debug-0.log || true
+              exit 1
+            }
           fi
 
       - name: Tag and GitHub Release
