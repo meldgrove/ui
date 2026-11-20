@@ -48,7 +48,7 @@ components it uses imports `@meldgrove/ui/theme.css` instead and adds
 `@source` lines for those files in `node_modules/@meldgrove/ui/dist/components`.
 
 `SidebarInset` renders a `<div>`; the app's page content brings its own
-`<main>`.
+`<main>`. Apps with the [app frame](#app-frame) get both from it.
 
 ### Language
 
@@ -68,6 +68,141 @@ toaster once; it follows the class `dark` on `<html>`:
 ```tsx
 import { Toaster } from "@meldgrove/ui/sonner";
 ```
+
+## App frame
+
+Every Meldgrove app shows its pages in the same frame. Changing it here
+changes every app.
+
+- **Sidebar:** the app's name at the top, then the search, the navigation as
+  text (no icons) and the person at the bottom. ⌘B or Ctrl+B, or a click on
+  its edge, hides it completely. On phones it is a sheet that closes once a
+  page is chosen.
+- **Header:** the breadcrumbs (at most three steps; on phones only "‹ back")
+  and, at the right, `headerEnd`: the update button for admins.
+- **User menu:** Appearance (light, dark, device setting), Settings, Keyboard
+  shortcuts and Sign out.
+- **Keys:** ⌘K or Ctrl+K and "/" open the search. "G then a letter" opens a
+  main page. Ctrl+/ lists every shortcut (Ctrl on a Mac too). Shortcuts with
+  single letters can be turned off on the settings page (WCAG 2.1.4).
+
+```tsx
+import { AppFrame, type FrameLink, type NavGroup } from "@meldgrove/ui/app-frame";
+import { useThemePreference } from "@meldgrove/ui/theme";
+import { UpdateButton } from "@meldgrove/ui/updates";
+
+const nav: NavGroup[] = [
+  {
+    items: [
+      { label: "Overview", href: "/", shortcut: "o" },
+      { label: "Requests", href: "/requests", shortcut: "r", badge: openCount },
+    ],
+  },
+  { label: "Admin", items: [{ label: "Forms", href: "/admin/forms" }] },
+];
+
+const [theme, setTheme] = useThemePreference();
+
+<AppFrame
+  app={{ name: "Helpdesk", icon: <LifeBuoy />, description: organizationName }}
+  nav={nav}
+  pathname={pathname}
+  link={AppLink}
+  navigate={(href) => router.navigate({ to: href })}
+  user={{ name, email, detail: roleLabel, image }}
+  theme={theme}
+  onThemeChange={setTheme}
+  settingsHref="/settings"
+  onSignOut={signOut}
+  breadcrumbs={[{ label: "Requests", href: "/requests" }, { label: "REQ-142" }]}
+  headerEnd={isAdmin ? <UpdateButton /> : null}
+  search={{ find: (query, signal) => api.search(query, { signal }) }}
+>
+  <Outlet />
+</AppFrame>;
+```
+
+- **`link`:** the router's link. Next.js passes its `Link` as it is. Other
+  routers use a small adapter that passes every other prop on to the `<a>`:
+  `const AppLink: FrameLink = ({ href, ...props }) => <Link to={href} {...props} />;`
+- **`nav`:** the app filters it by role before it passes it in. The item
+  whose `href` the path starts with is marked (the longest one; "/" and
+  `exact` items only on themselves; `match` adds paths that belong to an
+  item, such as `["/e"]` for entries of a timeline at "/"). `shortcut` is for the main pages only,
+  each letter once (the console says so otherwise); "o" is the start page in
+  every app.
+- **`breadcrumbs`:** from the sidebar section to the page, without the app.
+  A record appears by its short number where it has one (REQ-142), else by
+  its name; long labels are cut.
+- **`search`:** without `find`, the search offers the app's pages.
+  `find(query, signal)` adds records (`href`, `title`, optional `reference`
+  and `kind`); `allResultsHref(query)` adds "Show all results".
+- **`theme`:** `useThemePreference()` keeps the choice in the browser and
+  sets the class `dark`. An app that saves it with the person passes its own
+  value. To avoid a light flash on load, the app sets the class in a small
+  script before React starts.
+- **`shortcuts`:** default: the person's choice in this browser
+  (`useShortcutsPreference`). An app that saves it with the person passes it.
+- **Next.js:** the frame takes functions and a component (`link`,
+  `navigate`, `onSignOut`), which cannot cross from a server component. Put
+  it in a client component of the app; the server layout passes data only,
+  with `defaultSidebarOpen` from the cookie `sidebar_state`. Vite apps leave
+  that out; the frame reads the cookie.
+- `SidebarInset` is inside the frame; the page brings its `Page` (below), not
+  another `<main>`.
+
+### Pages
+
+`Page` is the content area (centred, at most 80 rem; `wide` for full width),
+`PageHeader` the title with description and actions:
+
+```tsx
+import { Page, PageHeader } from "@meldgrove/ui/page";
+
+<Page>
+  <PageHeader
+    title="Requests"
+    description="Every request, newest first."
+    actions={<Button>New request</Button>}
+  />
+  …
+</Page>;
+```
+
+The main action of a page sits in its header; the frame has no button for it.
+
+### Sign-in page
+
+```tsx
+import { SignInPage } from "@meldgrove/ui/sign-in-page";
+
+<SignInPage
+  app={{ name: "Helpdesk", icon: <LifeBuoy /> }}
+  tagline="Send requests and follow them up."
+  organization={organizationName}
+  repositoryUrl="https://github.com/meldgrove/helpdesk"
+>
+  <Button onClick={signIn}>Sign in with your organization account</Button>
+</SignInPage>;
+```
+
+What the app is for sits on the left on wide screens, the sign-in on the
+right, and below it "Helpdesk is part of Meldgrove" with a link to the
+repository. The app's buttons and messages go in `children`.
+
+### Settings page
+
+```tsx
+import { AboutCard, AppearanceCard, KeyboardShortcutsCard } from "@meldgrove/ui/settings-cards";
+
+<AppearanceCard value={theme} onChange={setTheme} />
+<KeyboardShortcutsCard />
+<AboutCard appName="Helpdesk" repositoryUrl="https://github.com/meldgrove/helpdesk" />
+```
+
+`KeyboardShortcutsCard` without props keeps the choice in the browser, and
+the frame follows it. A private repository (CRM) links to
+`https://github.com/meldgrove` instead.
 
 ## Colors
 
@@ -205,7 +340,8 @@ sets that class from `prefers-color-scheme` in a small script.
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). `npm run dev` opens a demo page with
+See [CONTRIBUTING.md](CONTRIBUTING.md). `npm run dev:templates` opens the
+app frame with fake content of three apps. `npm run dev` opens a demo page with
 every component in light and dark, English and German, and with an app
 accent.
 

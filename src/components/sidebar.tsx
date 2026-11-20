@@ -85,6 +85,8 @@ function SidebarProvider({
   // Adds a keyboard shortcut to toggle the sidebar.
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Not in shadcn/ui: a key an editor already handled (Ctrl+B for bold) stays the editor's.
+      if (event.defaultPrevented) return;
       if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
         toggleSidebar();

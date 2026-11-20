@@ -20,8 +20,11 @@ src/
   updates/         the update button: types, state (pure logic), transport,
                    controller (behaviour without React), react (provider),
                    update-button, updates-settings, element (custom elements)
+  frame/           parts of the app frame (components/app-frame.tsx): search,
+                   breadcrumbs, shortcuts, keys, texts; not exported on their own
   test/            test setup and fixtures
 demo/              the demo page (npm run dev), also the subject of the screenshots
+  templates/       the template demo (npm run dev:templates): the app frame with fake app content
 e2e/               Playwright screenshots of the demo and the standalone elements
 scripts/           build, package check, screenshot baselines
 ```

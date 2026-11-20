@@ -13,6 +13,18 @@ globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObse
 Element.prototype.scrollIntoView ??= function scrollIntoView() {};
 Element.prototype.hasPointerCapture ??= () => false;
 Element.prototype.releasePointerCapture ??= () => undefined;
+// The sidebar asks whether the screen is narrow; jsdom has no media queries.
+window.matchMedia ??= (query: string) =>
+  ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    dispatchEvent: () => false,
+  }) as MediaQueryList;
 // jsdom has no BroadcastChannel; Node's would reach the pages of other test files.
 globalThis.BroadcastChannel = FakeBroadcastChannel as unknown as typeof BroadcastChannel;
 

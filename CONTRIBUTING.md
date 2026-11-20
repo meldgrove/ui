@@ -9,11 +9,18 @@ Node.js 26 (22 or later works) and, for screenshot baselines, Docker.
 
 ```sh
 npm ci
-npm run dev        # demo page at http://localhost:5180
+npm run dev            # demo page at http://localhost:5180
+npm run dev:templates  # template demo at http://localhost:5181
 ```
 
 The demo shows every component and the update button in each state. Query
 parameters switch the look: `?theme=dark`, `?locale=de`, `?accent=green`.
+
+The template demo shows the app frame, the sign-in page and the settings
+cards with the fake content of three apps (Helpdesk, CRM, Logbook), plus
+dashboard proposals that are not in the package yet. `?embed=1` hides its
+controls, `?locale=de` switches the frame to German.
+`npm run build:templates -- <file.html>` writes it as one file to share.
 
 ## Checks
 
