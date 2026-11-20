@@ -27,12 +27,11 @@ describe("<meldgrove-secret-input>", () => {
     expect(new FormData(document.querySelector("form")!).get("token")).toBe("s3cret");
   });
 
-  it("hides a field that the markup left visible, and speaks German", () => {
+  it("gives the field an id when it has none, and speaks German", () => {
     page(
-      `<meldgrove-secret-input locale="de"><input type="text" aria-label="Schlüssel"></meldgrove-secret-input>`,
+      `<meldgrove-secret-input locale="de"><input type="password" aria-label="Schlüssel"></meldgrove-secret-input>`,
     );
     const input = screen.getByLabelText("Schlüssel");
-    expect(input).toHaveAttribute("type", "password");
     expect(input.id).not.toBe("");
     expect(screen.getByRole("button", { name: "Anzeigen" })).toHaveAttribute("aria-controls", input.id);
   });

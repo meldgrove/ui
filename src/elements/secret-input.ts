@@ -89,7 +89,6 @@ export class MeldgroveSecretInput extends HTMLElement {
     const input = this.querySelector("input");
     if (!input) return;
     adoptStyles();
-    input.type = "password";
     if (!input.id) input.id = `meldgrove-secret-${++count}`;
     const button = document.createElement("button");
     button.type = "button";

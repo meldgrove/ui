@@ -38,6 +38,15 @@ describe("SecretInput", () => {
     expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
   });
 
+  it("copies what an uncontrolled field holds", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, "writeText");
+    render(<SecretInput aria-label="Key" defaultValue="key-789" copyable />);
+
+    await user.click(screen.getByRole("button", { name: "Copy" }));
+    expect(writeText).toHaveBeenCalledWith("key-789");
+  });
+
   it("speaks German below a German UIProvider", () => {
     render(
       <UIProvider locale="de">

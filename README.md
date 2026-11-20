@@ -366,8 +366,8 @@ plain input of the form:
 </meldgrove-secret-input>
 ```
 
-It hides the field even when the markup says `type="text"`, and takes its
-colors from `tokens.css`.
+The field must say `type="password"`, so it is hidden before the script
+loads. The button takes its colors from `tokens.css`.
 
 Apps without Tailwind can use `tokens.css` for the same colors. It switches
 to dark with the class `dark` on `<html>`; an app that follows the device

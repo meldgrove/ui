@@ -29,9 +29,11 @@ export function SecretInput({
   const inputId = id ?? fallbackId;
   const [shown, setShown] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
-  const copy = async () => {
+  const copy = async (button: HTMLElement) => {
+    // The field's live value: the field may be uncontrolled.
+    const input = button.closest("[data-slot=input-group]")?.querySelector("input");
     try {
-      await navigator.clipboard.writeText(String(props.value ?? ""));
+      await navigator.clipboard.writeText(input?.value ?? "");
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -64,7 +66,7 @@ export function SecretInput({
             size="icon-xs"
             aria-label={copied ? tc("copied") : tc("copy")}
             title={copied ? tc("copied") : tc("copy")}
-            onClick={() => void copy()}
+            onClick={(event) => void copy(event.currentTarget)}
           >
             {copied ? <Check /> : <Copy />}
           </InputGroupButton>
