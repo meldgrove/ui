@@ -223,12 +223,12 @@ describe("AppFrame", () => {
   it("offers the shortcuts and sign-out in the user menu", async () => {
     const user = userEvent.setup();
     const { onSignOut } = renderFrame();
-    await user.click(screen.getByRole("button", { name: "Account of Jane Doe" }));
+    await user.click(screen.getByRole("button", { name: /^Jane Doe/ }));
     await user.click(await screen.findByRole("menuitem", { name: /Keyboard shortcuts/ }));
     expect(await screen.findByRole("dialog", { name: "Keyboard shortcuts" })).toBeInTheDocument();
     await user.keyboard("{Escape}");
     await waitFor(() => expect(overview()).toBeNull());
-    await user.click(screen.getByRole("button", { name: "Account of Jane Doe" }));
+    await user.click(screen.getByRole("button", { name: /^Jane Doe/ }));
     await user.click(await screen.findByRole("menuitem", { name: "Sign out" }));
     expect(onSignOut).toHaveBeenCalled();
   });
@@ -360,6 +360,12 @@ describe("AppFrame", () => {
     await screen.findByRole("dialog", { name: "Search Helpdesk…" });
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.getByRole("main")).toHaveFocus());
+  });
+
+  it("names the account button by what it shows", () => {
+    renderFrame();
+    // Visible text is the accessible name (WCAG 2.5.3); the initials are decoration.
+    expect(screen.getByRole("button", { name: /^Jane Doe\s*jane@example\.org$/ })).toBeInTheDocument();
   });
 
   it("speaks German", () => {

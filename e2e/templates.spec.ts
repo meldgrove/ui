@@ -49,7 +49,7 @@ test("app frame, keyboard shortcuts", async ({ page }) => {
 
 test("app frame, user menu", async ({ page }) => {
   await open(page, "", "/");
-  await page.getByRole("button", { name: "Account of Jane Doe" }).click();
+  await page.getByRole("button", { name: /^Jane Doe/ }).click();
   const menu = page.getByRole("menu");
   await expect(menu).toBeVisible();
   await expect(menu).toHaveScreenshot("user-menu.png");

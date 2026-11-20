@@ -150,7 +150,8 @@ function UserMenu(props: {
   const Link = props.link;
   const person = (
     <>
-      <Avatar className="size-8 rounded-lg">
+      {/* Decoration: the name and email next to it are the button's name (WCAG 2.5.3). */}
+      <Avatar className="size-8 rounded-lg" aria-hidden="true">
         {user.image ? <AvatarImage src={user.image} alt="" /> : null}
         <AvatarFallback className="rounded-lg">{initials(user.name)}</AvatarFallback>
       </Avatar>
@@ -165,7 +166,6 @@ function UserMenu(props: {
       <DropdownMenuTrigger asChild>
         <SidebarMenuButton
           size="lg"
-          aria-label={t("account", { name: user.name })}
           className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
         >
           {person}
