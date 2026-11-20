@@ -63,8 +63,10 @@ export function SignInPage(props: {
       </section>
       <section className="flex flex-col items-center justify-center gap-8 p-6">
         <div className="flex w-full max-w-sm flex-col gap-6">
-          <div className="lg:hidden">
+          {/* Narrow screens have no left side: the mark and what the app is for come first. */}
+          <div className="space-y-3 lg:hidden">
             <AppMark name={props.app.name} icon={props.app.icon} />
+            <p className="text-muted-foreground text-sm">{props.tagline}</p>
           </div>
           <div className="space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight">{props.title ?? t("signIn")}</h1>

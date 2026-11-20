@@ -59,10 +59,15 @@ export function FrameCrumbs(props: { crumbs: Crumb[]; link: FrameLink; compact: 
               <BreadcrumbItem className="min-w-0">
                 {crumb === "more" ? (
                   <BreadcrumbEllipsis className="size-5" />
-                ) : last || !crumb.href ? (
+                ) : last ? (
                   <BreadcrumbPage className="block max-w-64 truncate" title={crumb.label}>
                     {crumb.label}
                   </BreadcrumbPage>
+                ) : !crumb.href ? (
+                  // A step without a page of its own (e.g. a group): text, not "the current page".
+                  <span className="block max-w-40 truncate" title={crumb.label}>
+                    {crumb.label}
+                  </span>
                 ) : (
                   <BreadcrumbLink asChild>
                     <Link href={crumb.href} className="block max-w-40 truncate" title={crumb.label}>

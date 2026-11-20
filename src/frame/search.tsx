@@ -47,7 +47,8 @@ export type AppSearchOptions = {
   allResultsHref?: (query: string) => string;
 };
 
-type SearchPage = { label: string; href: string; shortcut?: string };
+/** A page of the navigation; `group` tells pages with the same label apart. */
+type SearchPage = { label: string; href: string; shortcut?: string; group?: string };
 
 /** Looks like a search field at the top of the sidebar; opens the search. */
 export function SearchButton({ onClick }: { onClick: () => void }) {
@@ -219,6 +220,9 @@ function SearchPanel(props: Parameters<typeof SearchDialog>[0]) {
             {pages.map((page) => (
               <CommandItem key={page.href} value={`page ${page.href}`} onSelect={() => go(page.href)}>
                 {page.label}
+                {page.group && props.pages.filter((other) => other.label === page.label).length > 1 ? (
+                  <span className="text-muted-foreground text-xs">{page.group}</span>
+                ) : null}
                 {props.singleKeys && page.shortcut ? (
                   <CommandShortcut>G {page.shortcut.toUpperCase()}</CommandShortcut>
                 ) : null}

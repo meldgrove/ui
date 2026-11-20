@@ -52,6 +52,10 @@ export const common = defineMessages({
     page: "Page {page} of {pages}",
     total: "{count} entries",
     total_one: "1 entry",
+    close: "Close",
+    sidebar: "Sidebar",
+    sidebarDescription: "The app's navigation.",
+    toggleSidebar: "Show or hide the sidebar",
   },
   de: {
     cancel: "Abbrechen",
@@ -66,6 +70,10 @@ export const common = defineMessages({
     page: "Seite {page} von {pages}",
     total: "{count} Einträge",
     total_one: "1 Eintrag",
+    close: "Schließen",
+    sidebar: "Seitenleiste",
+    sidebarDescription: "Die Navigation der App.",
+    toggleSidebar: "Seitenleiste ein- oder ausblenden",
   },
 });
 

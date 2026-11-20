@@ -407,7 +407,14 @@ export function AppFrame(props: AppFrameProps) {
       </SidebarInset>
       <FrameLayers
         {...props}
-        pages={items.map((item) => ({ label: item.label, href: item.href, shortcut: item.shortcut }))}
+        pages={props.nav.flatMap((group) =>
+          group.items.map((item) => ({
+            label: item.label,
+            href: item.href,
+            shortcut: item.shortcut,
+            group: group.label,
+          })),
+        )}
         targets={targets}
         singleKeys={singleKeys}
         searchOpen={searchOpen}
