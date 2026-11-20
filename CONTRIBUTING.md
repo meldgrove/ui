@@ -52,19 +52,11 @@ Put the app's `package.json` and lock file back before committing there.
 
 Maintainers start a release in **Actions > Release > Run workflow** on
 `main`, with the part to raise (patch, minor, major) and optionally "Dry
-run". The workflow checks that CI passed, stages `@meldgrove/ui` on npm
+run". The workflow checks that CI passed, publishes `@meldgrove/ui` to npm
 with provenance, then pushes the tag `vX.Y.Z` and creates the GitHub
 Release with notes from the pull request titles. `package.json` stays at
-`0.0.0`; the tags hold the version.
-
-A staged version is not public yet. A maintainer approves it with 2FA, and
-only then do the apps get it:
-
-```sh
-npm login                  # once, if npm whoami says you are not logged in
-npm stage list @meldgrove/ui
-npm stage approve <id>     # or reject <id>
-```
+`0.0.0`; the tags hold the version. No approval follows: the version is
+public when the run ends.
 
 | Change                                   | Below 1.0.0 | From 1.0.0 |
 | ---------------------------------------- | ----------- | ---------- |
@@ -72,10 +64,10 @@ npm stage approve <id>     # or reject <id>
 | Features                                 | patch       | minor      |
 | Fixes, dependencies                      | patch       | patch      |
 
-npm stages through trusted publishing (OIDC): the package's settings on
-npmjs.com trust `meldgrove/ui`, workflow `release.yml`, which may only
-stage (`npm stage publish`; "Allow npm publish" stays off). No token is
-stored.
+npm publishes through trusted publishing (OIDC): the package's settings on
+npmjs.com trust `meldgrove/ui`, workflow `release.yml`, environment `npm`,
+with "Allow npm publish" on. The environment allows only `main`, so a
+workflow changed on another branch cannot publish. No token is stored.
 
 Apps depend on `^X.Y.Z`. Dependabot opens a pull request in each app for
 every release (the apps' configuration gives `@meldgrove/ui` a group of its

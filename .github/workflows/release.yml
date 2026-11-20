@@ -1,13 +1,13 @@
 # Maintainers start a release in Actions > Release > Run workflow (CONTRIBUTING.md,
 # Releases). It refuses unless started from main, CI passed for the commit and
 # something changed since the last release; raises the latest vX.Y.Z tag by the
-# chosen part (a pull request labelled `breaking` needs a new series); stages
-# the package on npm with provenance (a maintainer approves it with 2FA before
-# it is public); then pushes only the tag and creates the GitHub Release.
-# package.json stays at 0.0.0. A dry run stages nothing.
+# chosen part (a pull request labelled `breaking` needs a new series); publishes
+# the package to npm with provenance; then pushes only the tag and creates the
+# GitHub Release. package.json stays at 0.0.0. A dry run publishes nothing.
 #
-# npm: trusted publishing (OIDC) from this workflow. The secret NPM_TOKEN is only
-# for a first publish before the trusted publisher exists; delete it afterwards.
+# npm: trusted publishing (OIDC) from this workflow in the environment `npm`,
+# which only main may use. The secret NPM_TOKEN is only for a first publish
+# before the trusted publisher exists; delete it afterwards.
 # Only GitHub-owned actions pinned by commit SHA; npm runs through its command line.
 
 name: Release
@@ -39,6 +39,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment: npm # only main may use it; npm trusts no other
     permissions:
       actions: read # find the CI run of the commit
       contents: write # push the tag, create the GitHub Release
@@ -134,17 +135,17 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: npm version "$VERSION" --no-git-tag-version
 
-      - name: Stage on npm
+      - name: Publish to npm
         env:
           DRY_RUN: ${{ inputs.dry_run }}
           # Empty once trusted publishing is set up: npm then uses OIDC.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if [ "$DRY_RUN" = true ]; then
-            npm stage publish --access public --dry-run
+            npm publish --access public --dry-run
           else
             # Why npm refused the trusted publisher (OIDC) is only in its debug log.
-            npm stage publish --access public --provenance || {
+            npm publish --access public --provenance || {
               grep -h -i "oidc" "$HOME"/.npm/_logs/*-debug-0.log || true
               exit 1
             }
@@ -164,4 +165,4 @@ jobs:
           args=(--title "$TAG" --generate-notes --verify-tag)
           if [ -n "$PREVIOUS" ]; then args+=(--notes-start-tag "$PREVIOUS"); fi
           gh release create "$TAG" "${args[@]}"
-          echo "Staged @meldgrove/ui ${TAG#v}. It is public once a maintainer approves it (2FA): \`npm stage list @meldgrove/ui\`, then \`npm stage approve <id>\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "Published https://www.npmjs.com/package/@meldgrove/ui/v/${TAG#v}" >> "$GITHUB_STEP_SUMMARY"
