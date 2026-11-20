@@ -363,7 +363,7 @@ export function AppFrame(props: AppFrameProps) {
   const openShortcuts = useCallback(() => setShortcutsOpen(true), []);
 
   const items = props.nav.flatMap((group) => group.items);
-  const signature = items.map((item) => `${item.shortcut ?? ""}:${item.label}:${item.href}`).join("|");
+  const signature = JSON.stringify(items.map((item) => [item.shortcut ?? "", item.label, item.href]));
   const targets = useMemo<GoTarget[]>(
     () =>
       props.nav

@@ -257,6 +257,30 @@ describe("AppFrame", () => {
     expect(navigate).toHaveBeenCalledWith("/s/new");
   });
 
+  it("tells items apart whose label and href only together look alike", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    const frame = (label: string, href: string) => (
+      <AppFrame
+        app={{ name: "Handbook", icon: <svg /> }}
+        nav={[{ items: [{ label, href, shortcut: "s" }] }]}
+        pathname="/"
+        link={Link}
+        navigate={navigate}
+        user={{ name: "Jane Doe" }}
+        theme="system"
+        onThemeChange={() => undefined}
+        onSignOut={() => undefined}
+      >
+        <p>Page</p>
+      </AppFrame>
+    );
+    const { rerender } = render(frame("Space", "/docs:/archive"));
+    rerender(frame("Space:/docs", "/archive"));
+    await user.keyboard("gs");
+    expect(navigate).toHaveBeenCalledWith("/archive");
+  });
+
   it("never shows an answer to a search that was replaced", async () => {
     const user = userEvent.setup();
     const answers: ((results: { href: string; title: string }[]) => void)[] = [];
@@ -312,6 +336,23 @@ describe("AppFrame", () => {
     expect(main()).toBeNull();
     await user.click(screen.getByRole("button", { name: "Show or hide the sidebar" }));
     expect(main()).not.toBeNull();
+  });
+
+  it("gives focus back after the search and the shortcuts close", async () => {
+    const user = userEvent.setup();
+    renderFrame();
+    const searchButton = screen.getByRole("button", { name: /Search/ });
+    await user.click(searchButton);
+    await screen.findByRole("dialog", { name: "Search Helpdesk…" });
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(searchButton).toHaveFocus());
+
+    const field = screen.getByRole("textbox", { name: "Title" });
+    await user.click(field);
+    await user.keyboard("{Control>}/{/Control}");
+    await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(field).toHaveFocus());
   });
 
   it("speaks German", () => {

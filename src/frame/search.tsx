@@ -25,6 +25,7 @@ import { SidebarMenuButton } from "../components/sidebar.tsx";
 import { useT } from "../lib/i18n.tsx";
 import { cn } from "../lib/utils.ts";
 import { isSearchKey, isSlashKey, layerOpen } from "./keyboard.ts";
+import { useReturnFocus } from "./focus.ts";
 import { frameMessages } from "./messages.ts";
 import { useModifierLabel } from "./shortcuts.tsx";
 
@@ -100,9 +101,11 @@ export function SearchDialog(props: {
   onShortcuts: () => void;
 }) {
   const t = useT(frameMessages);
+  const returnFocus = useReturnFocus(props.open);
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent
+        onCloseAutoFocus={returnFocus}
         showCloseButton={false}
         className="top-[12vh] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-xl"
       >

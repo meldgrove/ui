@@ -12,6 +12,7 @@ import { Kbd, KbdGroup } from "../components/kbd.tsx";
 import { useT } from "../lib/i18n.tsx";
 import { cn } from "../lib/utils.ts";
 import { isOverviewKey, layerOpen, letterOf } from "./keyboard.ts";
+import { useReturnFocus } from "./focus.ts";
 import { frameMessages } from "./messages.ts";
 
 /** A page that "G then a letter" opens. */
@@ -194,9 +195,10 @@ export function ShortcutsDialog(props: {
   const t = useT(frameMessages);
   const { mod, ctrl } = useModifierLabel();
   const off = !props.enabled;
+  const returnFocus = useReturnFocus(props.open);
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" onCloseAutoFocus={returnFocus}>
         <DialogHeader>
           <DialogTitle>{t("shortcuts")}</DialogTitle>
           <DialogDescription>{t("shortcutsDescription")}</DialogDescription>
