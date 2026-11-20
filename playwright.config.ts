@@ -1,7 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * Screenshots of the demo page and of the standalone elements. Baselines come
+ * Screenshots of the demo page, the template demo (app frame, sign-in) and
+ * of the standalone elements. Baselines come
  * from the Playwright container (the same as in CI): npm run test:visual:update.
  */
 export default defineConfig({
@@ -20,9 +21,16 @@ export default defineConfig({
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 900 } } },
   ],
-  webServer: {
-    command: "npx vite --config demo/vite.config.ts",
-    url: "http://localhost:5180",
-    reuseExistingServer: !process.env.CI,
-  },
+  webServer: [
+    {
+      command: "npx vite --config demo/vite.config.ts",
+      url: "http://localhost:5180",
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      command: "npx vite --config demo/templates/vite.config.ts",
+      url: "http://localhost:5181",
+      reuseExistingServer: !process.env.CI,
+    },
+  ],
 });
