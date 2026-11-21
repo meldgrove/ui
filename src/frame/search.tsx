@@ -171,10 +171,13 @@ function SearchPanel(props: Parameters<typeof SearchDialog>[0]) {
   const results = searches && term && ready ? found.results : undefined;
   const allResults = term && props.options?.allResultsHref ? props.options.allResultsHref(term) : null;
 
+  // The shortcuts overview, while nothing is typed or the query names it.
+  const actions = !term || t("shortcuts").toLowerCase().includes(lower);
+
   let status: string | null = null;
   if (searches && term && !ready) status = t("searching");
   else if (results === null) status = t("searchFailed");
-  else if (pages.length === 0 && !results?.length) status = t("nothingFound");
+  else if (pages.length === 0 && !results?.length && !actions) status = t("nothingFound");
 
   return (
     <Command shouldFilter={false} loop className="rounded-none **:data-[slot=command-input-wrapper]:h-12">
@@ -230,7 +233,7 @@ function SearchPanel(props: Parameters<typeof SearchDialog>[0]) {
             ))}
           </CommandGroup>
         ) : null}
-        {!term || t("shortcuts").toLowerCase().includes(lower) ? (
+        {actions ? (
           <CommandGroup heading={t("actions")}>
             <CommandItem
               value="action shortcuts"
