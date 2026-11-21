@@ -78,8 +78,9 @@ export type NavItem = {
   /** A count or marker at the right, e.g. open tasks. */
   badge?: ReactNode;
   /**
-   * "G then this letter" opens the page. Only for the app's main pages, each
-   * letter once; "o" is the start page in every app.
+   * "G then this letter" opens the page. Only for main pages people open
+   * often, with a letter they can guess, each letter once; none for admin
+   * pages. "o" is the start page in every app.
    */
   shortcut?: string;
   /** Active only on the page itself, not on its sub-pages. "/" is always exact. */
@@ -105,7 +106,11 @@ export type AppFrameProps = {
   /** "Appearance" in the user menu; `useThemePreference` from `@meldgrove/ui/theme` keeps one in the browser. */
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
-  /** The person's settings page: in the user menu and in the shortcuts overview. */
+  /**
+   * The person's settings page: "Settings" in the user menu and in the
+   * shortcuts overview. Things about the person's account, such as a link to
+   * the sign-in provider's account page, go on that page, not in the header.
+   */
   settingsHref?: string;
   onSignOut: () => void;
   /** Where the page sits in the app, from the sidebar section to the page; at most three show. */

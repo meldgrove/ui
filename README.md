@@ -101,7 +101,10 @@ changes every app.
 - **Header:** the breadcrumbs (at most three steps; on phones only "‹ back")
   and, at the right, `headerEnd`: the update button for admins.
 - **User menu:** Appearance (light, dark, device setting), Settings, Keyboard
-  shortcuts and Sign out.
+  shortcuts and Sign out. Settings opens the person's settings page
+  (`settingsHref`) in every app. Things about the person's account, such as
+  a link to the sign-in provider's account page, go on that page as a card,
+  not in the header.
 - **Keys:** ⌘K or Ctrl+K and "/" open the search. "G then a letter" opens a
   main page. Ctrl+/ lists every shortcut (Ctrl on a Mac too). Shortcuts with
   single letters can be turned off on the settings page (WCAG 2.1.4).
@@ -151,9 +154,11 @@ const [theme, setTheme] = useThemePreference();
 - **`nav`:** the app filters it by role before it passes it in. The item
   whose `href` the path starts with is marked (the longest one; "/" and
   `exact` items only on themselves; `match` adds paths that belong to an
-  item, such as `["/e"]` for entries of a timeline at "/"). `shortcut` is for the main pages only,
-  each letter once (the console says so otherwise); "o" is the start page in
-  every app.
+  item, such as `["/e"]` for entries of a timeline at "/"). `shortcut` is for main pages people open
+  often, with a letter they can guess, each letter once (the console says so
+  otherwise); none for admin pages, which the search reaches as fast. "o" is
+  the start page in every app. There is no fixed number: a page whose obvious
+  letter is taken gets no key rather than a letter nobody guesses.
 - **`breadcrumbs`:** from the sidebar section to the page, without the app.
   A record appears by its short number where it has one (REQ-142), else by
   its name; long labels are cut.
