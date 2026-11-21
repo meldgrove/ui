@@ -402,6 +402,23 @@ describe("AppFrame", () => {
     expect(within(dialog).getByRole("option", { name: /People\s*Administration/ })).toBeInTheDocument();
   });
 
+  it("does not say nothing was found while it offers the shortcuts", async () => {
+    const user = userEvent.setup();
+    renderFrame();
+    await user.keyboard("/");
+    const dialog = await screen.findByRole("dialog", { name: "Search Helpdesk…" });
+    await user.keyboard("keyb");
+    expect(within(dialog).getByRole("option", { name: /Keyboard shortcuts/ })).toBeInTheDocument();
+    expect(within(dialog).queryByText("Nothing found.")).toBeNull();
+    await user.keyboard("x");
+    expect(within(dialog).getByText("Nothing found.")).toBeInTheDocument();
+  });
+
+  it("takes whole characters as initials", () => {
+    renderFrame({ user: { name: "😀 Jane Doe" } });
+    expect(document.querySelector("[data-slot=avatar-fallback]")).toHaveTextContent(/^😀D$/u);
+  });
+
   it("speaks German in its dialogs too", async () => {
     const user = userEvent.setup();
     renderFrame({}, "de");
