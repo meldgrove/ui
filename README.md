@@ -259,8 +259,14 @@ links, the active sidebar item and the update dot.
   }
   ```
 
-The Meldgrove brand palette is not chosen yet; the tokens hold the neutral
-palette the apps used so far.
+The Meldgrove apps use the neutral palette in the tokens, with no accent of
+their own (chosen on 23.11.2026).
+
+## Fonts
+
+The theme sets no font family on purpose: the apps use the system fonts of
+each device (Tailwind's default `--font-sans` and `--font-mono` stacks) and
+load no font file.
 
 ## Update button
 

@@ -12,9 +12,9 @@
  *   :root { --mg-accent: oklch(0.55 0.15 160); --mg-accent-foreground: oklch(0.985 0 0); }
  *   .dark { --mg-accent: oklch(0.75 0.13 160); --mg-accent-foreground: oklch(0.2 0 0); }
  *
- * The Meldgrove brand palette is not chosen yet; the values below are the
- * neutral shadcn palette the apps used so far. A palette change here reaches
- * every app with its next update of the package.
+ * The Meldgrove apps use the neutral palette below with no accent of their
+ * own (chosen on 23.11.2026). A palette change here reaches every app with
+ * its next update of the package.
  */
 
 :root,
