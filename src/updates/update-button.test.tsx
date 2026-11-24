@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { fakeTransport, ok, release, response, status } from "../test/updates.ts";
 import { UIProvider, type Locale } from "../lib/i18n.tsx";
@@ -164,6 +164,25 @@ describe("UpdateButton", () => {
     expect(await screen.findByText("0.2.1 failed: The deploy link answered 502.")).toBeInTheDocument();
   });
 
+  it("names the stage of an installation, also the database backup before it", async () => {
+    const user = userEvent.setup();
+    const installing = (stage: "backing-up" | "pulling") =>
+      response(
+        status({
+          available: release("0.2.1"),
+          installing: { version: "0.2.1", startedAt: "2026-11-19T09:00:00Z", manual: false, stage },
+        }),
+      );
+    let current = installing("backing-up");
+    const transport = fakeTransport({ status: () => ok(current) });
+    const { controller } = renderWith(transport);
+    await user.click(await screen.findByRole("button", { name: /Installing 0\.2\.1/ }));
+    expect(await screen.findByText("Backing up the database")).toBeInTheDocument();
+    current = installing("pulling");
+    await controller.fetchStatus();
+    expect(await screen.findByText("Downloading")).toBeInTheDocument();
+  });
+
   it("speaks German", async () => {
     const user = userEvent.setup();
     const transport = fakeTransport({ status: () => ok(response(status({ available: release("0.2.1") }))) });
@@ -226,6 +245,30 @@ describe("UpdatesSettingsCard", () => {
     expect(screen.getByRole("heading", { name: "Updates" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Check now" }));
     await waitFor(() => expect(transport.count("check")).toBe(1));
+  });
+
+  it("warns while the update service takes requests without a token", async () => {
+    const transport = fakeTransport({ status: () => ok(response(status({ apiToken: false }))) });
+    renderWith(transport, "en", <UpdatesSettingsCard />);
+    expect(
+      await screen.findByText(/takes requests from anything on the app's network, without a token/),
+    ).toHaveTextContent(
+      "The update service takes requests from anything on the app's network, without a token. Set UPDATER_TOKEN as the deployment guide explains.",
+    );
+    expect(screen.getByRole("link", { name: "deployment guide" })).toHaveAttribute(
+      "href",
+      "https://example.org/guide",
+    );
+  });
+
+  it("does not warn when the updater needs a token, or does not say (before 0.2.4)", async () => {
+    for (const apiToken of [true, undefined]) {
+      const transport = fakeTransport({ status: () => ok(response(status({ apiToken }))) });
+      renderWith(transport, "en", <UpdatesSettingsCard />);
+      expect(await screen.findByText("· Updater 0.2.0")).toBeInTheDocument();
+      expect(screen.queryByText(/without a token/)).not.toBeInTheDocument();
+      cleanup();
+    }
   });
 
   it("asks to sign in again when the routes refuse before any status", async () => {

@@ -19,7 +19,9 @@ src/
   hooks/           use-mobile
   updates/         the update button: types, state (pure logic), transport,
                    controller (behaviour without React), react (provider),
-                   update-button, updates-settings, element (custom elements)
+                   update-button, updates-settings, element (custom elements),
+                   server (the app's four routes on its server, no React),
+                   testing (a fake updater for the apps' route tests)
   elements/        custom elements without React (the eye button of a password field)
   frame/           parts of the app frame (components/app-frame.tsx): search,
                    breadcrumbs, shortcuts, keys, texts; not exported on their own

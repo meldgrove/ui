@@ -31,6 +31,7 @@ export const messages = defineMessages({
     stillRunning: "{version} is still running.",
     tryAgain: "Try again",
     installing: "Installing {version}…",
+    "stage_backing-up": "Backing up the database",
     stage_pulling: "Downloading",
     stage_starting: "Starting",
     "stage_rolling-back": "Going back to {version}",
@@ -87,6 +88,8 @@ export const messages = defineMessages({
     autoPlatform: "The platform installs them (deploy link).",
     sectionUnreachable: "The update service is not reachable.",
     sectionUnreachableHelp: "Automatic updates need the updater service from compose.yaml ({guide}).",
+    noToken:
+      "The update service takes requests from anything on the app's network, without a token. Set UPDATER_TOKEN as the {guide} explains.",
     lastCheck: "Last check",
     updaterVersion: "Updater {version}",
     signedOut: "Sign in again as an admin to manage updates.",
@@ -124,6 +127,7 @@ export const messages = defineMessages({
     stillRunning: "{version} läuft weiter.",
     tryAgain: "Erneut versuchen",
     installing: "{version} wird installiert …",
+    "stage_backing-up": "Sicherung der Datenbank",
     stage_pulling: "Download",
     stage_starting: "Start",
     "stage_rolling-back": "Zurück zu {version}",
@@ -183,6 +187,8 @@ export const messages = defineMessages({
     autoPlatform: "Die Plattform installiert sie (Deploy-Link).",
     sectionUnreachable: "Der Update-Dienst ist nicht erreichbar.",
     sectionUnreachableHelp: "Automatische Updates brauchen den Dienst updater aus compose.yaml ({guide}).",
+    noToken:
+      "Der Update-Dienst nimmt Anfragen von allem im Netzwerk der App an, ohne Token. Setze UPDATER_TOKEN, wie es die {guide} erklärt.",
     lastCheck: "Letzte Prüfung",
     updaterVersion: "Updater {version}",
     signedOut: "Melde dich erneut als Admin an, um Updates zu verwalten.",

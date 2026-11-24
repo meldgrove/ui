@@ -45,6 +45,14 @@
       "types": "./dist/updates/core.d.ts",
       "default": "./dist/updates/core.js"
     },
+    "./updates/server": {
+      "types": "./dist/updates/server.d.ts",
+      "default": "./dist/updates/server.js"
+    },
+    "./updates/testing": {
+      "types": "./dist/updates/testing.d.ts",
+      "default": "./dist/updates/testing.js"
+    },
     "./utils": {
       "types": "./dist/lib/utils.d.ts",
       "default": "./dist/lib/utils.js"
