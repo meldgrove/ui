@@ -345,11 +345,22 @@ const updates = createUpdatesHandler(() => ({
   logger, // optional: pino or console
 }));
 
-// Hono
-router.get("/admin/updates", (c) => (requireAdmin(c), updates.respond("status")));
-router.post("/admin/updates/check", (c) => (requireAdmin(c), updates.respond("check")));
-router.post("/admin/updates/install", (c) => (requireAdmin(c), updates.respond("install", c.req.raw)));
-router.post("/admin/updates/channel", (c) => (requireAdmin(c), updates.respond("channel", c.req.raw)));
+// Hono: answer through the context, so headers that middleware set before
+// the route (such as x-request-id) stay.
+const answer = async (c: Context, response: Promise<Response>) => {
+  const result = await response;
+  return c.newResponse(result.body, result);
+};
+router.get("/admin/updates", (c) => (requireAdmin(c), answer(c, updates.respond("status"))));
+router.post("/admin/updates/check", (c) => (requireAdmin(c), answer(c, updates.respond("check"))));
+router.post(
+  "/admin/updates/install",
+  (c) => (requireAdmin(c), answer(c, updates.respond("install", c.req.raw))),
+);
+router.post(
+  "/admin/updates/channel",
+  (c) => (requireAdmin(c), answer(c, updates.respond("channel", c.req.raw))),
+);
 
 // Next.js: app/api/admin/updates/install/route.ts
 export async function POST(request: Request) {
@@ -362,6 +373,13 @@ export async function POST(request: Request) {
   are never cached (`Cache-Control: no-store`).
 - The updater answers 401 when its `API_TOKEN` is set and the app sends
   none or another token; the error names `UPDATER_TOKEN`.
+- Bundle it into the server; do not install it there. In a repository with
+  workspaces, `@meldgrove/ui` in the server workspace's `package.json`
+  (also as a devDependency) makes npm install it with its React peers in a
+  production install of that workspace (`npm ci --omit=dev --workspace
+<server>`): 64 MB more in Handbook's image. Put it in the root
+  `devDependencies` and let the server's bundler (esbuild) include
+  `@meldgrove/ui/updates/server`.
 - `@meldgrove/ui/updates/testing` has `startFakeUpdater({ token? })`, an
   updater API on a free local port that records each call, and
   `updaterStatus(overrides)`, for the app's own route tests in Node.
