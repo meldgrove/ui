@@ -345,11 +345,22 @@ const updates = createUpdatesHandler(() => ({
   logger, // optional: pino or console
 }));
 
-// Hono
-router.get("/admin/updates", (c) => (requireAdmin(c), updates.respond("status")));
-router.post("/admin/updates/check", (c) => (requireAdmin(c), updates.respond("check")));
-router.post("/admin/updates/install", (c) => (requireAdmin(c), updates.respond("install", c.req.raw)));
-router.post("/admin/updates/channel", (c) => (requireAdmin(c), updates.respond("channel", c.req.raw)));
+// Hono: answer through the context, so headers that middleware set before
+// the route (such as x-request-id) stay.
+const answer = async (c: Context, response: Promise<Response>) => {
+  const result = await response;
+  return c.newResponse(result.body, result);
+};
+router.get("/admin/updates", (c) => (requireAdmin(c), answer(c, updates.respond("status"))));
+router.post("/admin/updates/check", (c) => (requireAdmin(c), answer(c, updates.respond("check"))));
+router.post(
+  "/admin/updates/install",
+  (c) => (requireAdmin(c), answer(c, updates.respond("install", c.req.raw))),
+);
+router.post(
+  "/admin/updates/channel",
+  (c) => (requireAdmin(c), answer(c, updates.respond("channel", c.req.raw))),
+);
 
 // Next.js: app/api/admin/updates/install/route.ts
 export async function POST(request: Request) {
