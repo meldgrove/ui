@@ -323,7 +323,53 @@ import { UpdateButton, UpdatesProvider, UpdatesSettingsCard } from "@meldgrove/u
   functions (`transport`, `notify`, `onSignedOut`). The status is read from
   sessionStorage only after hydration, so server and client render the same.
 - `@meldgrove/ui/updates/core` has the logic without React, for tests and
-  server code.
+  views of the app's own.
+
+### Server routes
+
+`@meldgrove/ui/updates/server` serves the four routes on the app's server:
+it asks the updater, sends `UPDATER_TOKEN`, and answers with the status the
+components expect (refusals as 409, the updater's own 5xx as 5xx, an updater
+that does not answer as `reachable: false`). It uses only `fetch`,
+`Request` and `Response`, so it fits Hono and Next.js route handlers, and
+it needs no React. The app checks the admin session and its CSRF protection
+first; everyone else gets the app's usual 404.
+
+```ts
+import { createUpdatesHandler } from "@meldgrove/ui/updates/server";
+
+const updates = createUpdatesHandler(() => ({
+  url: config().UPDATER_URL, // empty: no updater, no call
+  token: config().UPDATER_TOKEN, // the updater's API_TOKEN
+  appVersion: config().APP_VERSION ?? null,
+  logger, // optional: pino or console
+}));
+
+// Hono
+router.get("/admin/updates", (c) => (requireAdmin(c), updates.respond("status")));
+router.post("/admin/updates/check", (c) => (requireAdmin(c), updates.respond("check")));
+router.post("/admin/updates/install", (c) => (requireAdmin(c), updates.respond("install", c.req.raw)));
+router.post("/admin/updates/channel", (c) => (requireAdmin(c), updates.respond("channel", c.req.raw)));
+
+// Next.js: app/api/admin/updates/install/route.ts
+export async function POST(request: Request) {
+  return (await refuseUnlessAdmin(request)) ?? updates.respond("install", request);
+}
+```
+
+- `respond` checks the body (`{"version"}` of the contract's pattern,
+  `{"channel": "stable" | "preview"}`) and answers 400 otherwise. Answers
+  are never cached (`Cache-Control: no-store`).
+- The updater answers 401 when its `API_TOKEN` is set and the app sends
+  none or another token; the error names `UPDATER_TOKEN`.
+- `@meldgrove/ui/updates/testing` has `startFakeUpdater({ token? })`, an
+  updater API on a free local port that records each call, and
+  `updaterStatus(overrides)`, for the app's own route tests in Node.
+
+The settings section warns while the updater takes requests without a
+token (updater 0.2.4 and later report `apiToken` in their status). The
+button names each stage of an installation, including the database backup
+the server takes first (`backing-up`, updater 0.2.4 and later).
 
 ## Apps without React
 

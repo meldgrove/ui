@@ -72,7 +72,7 @@ function ReleaseNotesLink({ controller, update }: { controller: UpdatesControlle
   );
 }
 
-const STAGES = new Set(["pulling", "starting", "rolling-back", "deploying"]);
+const STAGES = new Set(["backing-up", "pulling", "starting", "rolling-back", "deploying"]);
 
 /** In mode off, in place of the install buttons: nothing can install from here. */
 function OffNote({ controller }: { controller: UpdatesController }) {

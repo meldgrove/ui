@@ -153,7 +153,16 @@ export function UpdatesSettings() {
           <AlertDescription>
             <p className="break-words">{response.error ?? t("sectionUnreachable")}</p>
             <p>
-              <GuideText controller={controller} guideUrl={guideUrl} />
+              <GuideText controller={controller} guideUrl={guideUrl} text="sectionUnreachableHelp" />
+            </p>
+          </AlertDescription>
+        </Alert>
+      ) : status.apiToken === false ? (
+        // Updater 0.2.4 and later say whether their API needs a token; older ones say nothing.
+        <Alert>
+          <AlertDescription>
+            <p>
+              <GuideText controller={controller} guideUrl={guideUrl} text="noToken" />
             </p>
           </AlertDescription>
         </Alert>
@@ -199,9 +208,17 @@ export function UpdatesSettings() {
   );
 }
 
-/** "Automatic updates need the updater service from compose.yaml (deployment guide)", with the link. */
-function GuideText({ controller, guideUrl }: { controller: UpdatesController; guideUrl: string | null }) {
-  const [before, after] = controller.t("sectionUnreachableHelp").split("{guide}");
+/** A text with "{guide}" in it, such as "… from compose.yaml (deployment guide)", with the link. */
+function GuideText({
+  controller,
+  guideUrl,
+  text,
+}: {
+  controller: UpdatesController;
+  guideUrl: string | null;
+  text: "sectionUnreachableHelp" | "noToken";
+}) {
+  const [before, after] = controller.t(text).split("{guide}");
   return (
     <>
       {before}

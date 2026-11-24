@@ -27,7 +27,7 @@ export type Update = {
   failed: string | null;
 };
 
-export type InstallStage = "requested" | "pulling" | "starting" | "rolling-back" | "deploying";
+export type InstallStage = "requested" | "backing-up" | "pulling" | "starting" | "rolling-back" | "deploying";
 export type InstallResult = "installed" | "failed" | "rolled-back" | "accepted";
 
 export type UpdaterStatus = {
@@ -56,6 +56,11 @@ export type UpdaterStatus = {
   /** Automatic installs only between these times of day, e.g. "02:00-05:00". */
   window: string | null;
   timezone: string;
+  /**
+   * Whether the updater's API needs a token (its API_TOKEN is set). Since
+   * updater 0.2.4; missing from older ones.
+   */
+  apiToken?: boolean;
 };
 
 export type UpdatesResponse = {
@@ -73,6 +78,10 @@ type Check = (value: unknown) => boolean;
 const isString: Check = (value) => typeof value === "string";
 const isBoolean: Check = (value) => typeof value === "boolean";
 const isNumber: Check = (value) => typeof value === "number" && Number.isFinite(value);
+const optional =
+  (check: Check): Check =>
+  (value) =>
+    value === undefined || check(value);
 const nullable =
   (check: Check): Check =>
   (value) =>
@@ -133,6 +142,7 @@ const isStatus = object({
   cooldown: nullable(isString),
   window: nullable(isString),
   timezone: isString,
+  apiToken: optional(isBoolean),
 });
 
 const isResponse = object({
@@ -141,6 +151,11 @@ const isResponse = object({
   updater: nullable(isStatus),
   error: nullable(isString),
 });
+
+/** The updater's status (`GET /v1/status`) when it has the expected shape; null otherwise. */
+export function parseUpdaterStatus(data: unknown): UpdaterStatus | null {
+  return isStatus(data) ? (data as UpdaterStatus) : null;
+}
 
 /** The answer of an update route when it has the expected shape; null otherwise. */
 export function parseUpdatesResponse(data: unknown): UpdatesResponse | null {
