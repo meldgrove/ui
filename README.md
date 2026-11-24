@@ -366,7 +366,7 @@ export async function POST(request: Request) {
   workspaces, `@meldgrove/ui` in the server workspace's `package.json`
   (also as a devDependency) makes npm install it with its React peers in a
   production install of that workspace (`npm ci --omit=dev --workspace
-  <server>`): 64 MB more in Handbook's image. Put it in the root
+<server>`): 64 MB more in Handbook's image. Put it in the root
   `devDependencies` and let the server's bundler (esbuild) include
   `@meldgrove/ui/updates/server`.
 - `@meldgrove/ui/updates/testing` has `startFakeUpdater({ token? })`, an
