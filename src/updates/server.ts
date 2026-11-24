@@ -14,7 +14,7 @@
  *     token: config().UPDATER_TOKEN,
  *     appVersion: config().APP_VERSION ?? null,
  *   }));
- *   router.get("/admin/updates", (c) => { requireAdmin(c); return updates.respond("status", c.req.raw); });
+ *   router.get("/admin/updates", (c) => { requireAdmin(c); return updates.respond("status"); });
  *   router.post("/admin/updates/install", (c) => { requireAdmin(c); return updates.respond("install", c.req.raw); });
  */
 import type { UpdatesAction } from "./transport.ts";
@@ -30,14 +30,14 @@ import {
 export type { UpdatesAction } from "./transport.ts";
 
 /** The updater's API calls behind each action, and how long each may take. */
-export const UPDATER_CALLS = {
+const UPDATER_CALLS = {
   status: { method: "GET", path: "/v1/status", timeoutMs: 3_000 },
   check: { method: "POST", path: "/v1/check", timeoutMs: 35_000 },
   install: { method: "POST", path: "/v1/install", timeoutMs: 10_000 },
   channel: { method: "POST", path: "/v1/channel", timeoutMs: 35_000 },
 } as const satisfies Record<UpdatesAction, { method: string; path: string; timeoutMs: number }>;
 
-export type UpdaterRequest =
+type UpdaterRequest =
   | { call: "status" }
   | { call: "check" }
   | { call: "install"; version: string }
@@ -47,7 +47,7 @@ export type UpdaterRequest =
  * What a route answers: 200 (202 when an installation started), 409 when
  * the updater refused (4xx), or the updater's own 5xx (it may have started).
  */
-export type UpdatesAnswer = { status: number; body: UpdatesResponse };
+type UpdatesAnswer = { status: number; body: UpdatesResponse | { error: string } };
 
 /** Where problems go: a pino logger fits, and so does `console`. */
 export type UpdatesLogger = {
@@ -74,7 +74,6 @@ type Outcome =
   | { kind: "unreachable"; error: string; timedOut: boolean };
 
 const MAX_ERROR_LENGTH = 1000;
-const MAX_BODY_LENGTH = 4096;
 const NO_STORE = { "cache-control": "no-store" };
 
 async function send(options: UpdatesHandlerOptions, base: string, request: UpdaterRequest): Promise<Outcome> {
@@ -100,12 +99,6 @@ async function send(options: UpdatesHandlerOptions, base: string, request: Updat
       redirect: "error",
       signal: AbortSignal.timeout(timeoutMs),
     });
-    const text = await response.text();
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch {
-      data = null;
-    }
   } catch (error) {
     const timedOut = (error as { name?: unknown } | null)?.name === "TimeoutError";
     options.logger?.debug?.({ call: request.call, timedOut }, "update service not reached");
@@ -116,6 +109,13 @@ async function send(options: UpdatesHandlerOptions, base: string, request: Updat
         ? `The update service did not answer within ${timeoutMs / 1000} seconds.`
         : "The update service is not reachable.",
     };
+  }
+  // The answer's status counts even when its body breaks off: a 202 still started.
+  try {
+    const text = await response.text();
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
   }
   if (!response.ok) {
     const message = (data as { error?: unknown } | null)?.error;
@@ -157,10 +157,7 @@ async function send(options: UpdatesHandlerOptions, base: string, request: Updat
  * status shows whether it happened anyway; a 202 whose body cannot be read
  * stays a 202.
  */
-export async function askUpdater(
-  options: UpdatesHandlerOptions,
-  request: UpdaterRequest,
-): Promise<UpdatesAnswer> {
+async function askUpdater(options: UpdatesHandlerOptions, request: UpdaterRequest): Promise<UpdatesAnswer> {
   const app = { version: options.appVersion ?? null };
   const base = options.url?.trim();
   if (!base) return { status: 200, body: { app, reachable: false, updater: null, error: null } };
@@ -189,7 +186,7 @@ export async function askUpdater(
 }
 
 /** The request an action asks for, from the route's JSON body; a sentence for the admin when it is wrong. */
-export function updaterRequest(
+function updaterRequest(
   action: UpdatesAction,
   body: unknown,
 ): { request: UpdaterRequest } | { error: string } {
@@ -205,12 +202,10 @@ export function updaterRequest(
     : { error: 'Send {"channel": "stable"} or {"channel": "preview"}.' };
 }
 
+/** The request's JSON body; null when there is none or it cannot be read. */
 async function readJson(request: Request | undefined): Promise<unknown> {
-  if (!request?.body) return null;
-  const text = await request.text();
-  if (!text || text.length > MAX_BODY_LENGTH) return null;
   try {
-    return JSON.parse(text);
+    return request ? await request.json() : null;
   } catch {
     return null;
   }
@@ -223,27 +218,22 @@ async function readJson(request: Request | undefined): Promise<unknown> {
 export function createUpdatesHandler(options: UpdatesHandlerOptions | (() => UpdatesHandlerOptions)) {
   const current = () => (typeof options === "function" ? options() : options);
 
-  /** The answer as data, for apps that build the response themselves; 400 for a wrong body. */
-  const answer = async (
-    action: UpdatesAction,
-    body?: unknown,
-  ): Promise<UpdatesAnswer | { status: 400; body: { error: string } }> => {
-    const parsed = updaterRequest(action, body);
-    if ("error" in parsed) return { status: 400, body: { error: parsed.error } };
-    return askUpdater(current(), parsed.request);
-  };
-
   /**
-   * The route's `Response` (never cached). `request` carries the JSON body of
-   * `install` and `channel`; `status` and `check` need none.
+   * The route's `Response` (never cached): `UpdatesResponse`, or 400 with
+   * `{error}` for a wrong body. `request` carries the JSON body of `install`
+   * and `channel`; `status` and `check` need none.
    */
   const respond = async (action: UpdatesAction, request?: Request): Promise<Response> => {
     const body = action === "install" || action === "channel" ? await readJson(request) : null;
-    const result = await answer(action, body);
+    const parsed = updaterRequest(action, body);
+    const result: UpdatesAnswer =
+      "error" in parsed
+        ? { status: 400, body: { error: parsed.error } }
+        : await askUpdater(current(), parsed.request);
     return Response.json(result.body, { status: result.status, headers: NO_STORE });
   };
 
-  return { answer, respond };
+  return { respond };
 }
 
 export type UpdatesHandler = ReturnType<typeof createUpdatesHandler>;

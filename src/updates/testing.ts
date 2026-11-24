@@ -60,7 +60,7 @@ export type FakeUpdater = {
   url: string;
   /** Every request, in order (also the ones refused for a missing token). */
   calls: FakeUpdaterCall[];
-  /** Sets the reply of each later request (default: 200 with `updaterStatus()`). */
+  /** Sets the reply of each later request (default: 200 with `updaterStatus()`, `apiToken` as set up). */
   respond(handler: (call: FakeUpdaterCall) => FakeUpdaterReply): void;
   close(): Promise<void>;
 };
@@ -72,7 +72,10 @@ export type FakeUpdater = {
  */
 export async function startFakeUpdater(options: { token?: string } = {}): Promise<FakeUpdater> {
   const calls: FakeUpdaterCall[] = [];
-  let respond: (call: FakeUpdaterCall) => FakeUpdaterReply = () => ({ body: updaterStatus() });
+  // Its status says whether it needs a token, as the updater's does.
+  let respond: (call: FakeUpdaterCall) => FakeUpdaterReply = () => ({
+    body: updaterStatus({ apiToken: Boolean(options.token) }),
+  });
   const server: Server = createServer(async (request, response) => {
     let text = "";
     for await (const chunk of request) text += chunk;

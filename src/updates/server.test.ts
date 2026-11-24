@@ -1,8 +1,32 @@
 // @vitest-environment node
 import { readdirSync, readFileSync } from "node:fs";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { askUpdater, createUpdatesHandler, updaterRequest, type UpdatesHandlerOptions } from "./server.ts";
+import { createUpdatesHandler, type UpdatesAction, type UpdatesHandlerOptions } from "./server.ts";
 import { startFakeUpdater, updaterStatus, type FakeUpdater } from "./testing.ts";
+import type { UpdatesResponse } from "./types.ts";
+
+type Ask =
+  | { call: "status" | "check" }
+  | { call: "install"; version: string }
+  | { call: "channel"; channel: "stable" | "preview" };
+
+/** One route through the handler, as status code and JSON body. */
+async function askUpdater(options: UpdatesHandlerOptions, ask: Ask) {
+  const body =
+    "version" in ask ? { version: ask.version } : "channel" in ask ? { channel: ask.channel } : null;
+  const request = body
+    ? new Request("http://app.test/", { method: "POST", body: JSON.stringify(body) })
+    : undefined;
+  const response = await createUpdatesHandler(options).respond(ask.call, request);
+  return { status: response.status, body: (await response.json()) as UpdatesResponse };
+}
+
+/** What a route answers to a JSON body. */
+async function answerTo(action: UpdatesAction, body: string | null) {
+  const request = body === null ? undefined : new Request("http://app.test/", { method: "POST", body });
+  const response = await createUpdatesHandler(options).respond(action, request);
+  return { status: response.status, body: (await response.json()) as unknown };
+}
 
 let updater: FakeUpdater;
 let options: UpdatesHandlerOptions;
@@ -113,6 +137,26 @@ describe("askUpdater", () => {
     });
   });
 
+  it("keeps the status code when the answer's body breaks off", async () => {
+    const broken = (status: number) => async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.error(new Error("connection reset"));
+          },
+        }),
+        { status },
+      );
+    const ask = (status: number) =>
+      askUpdater({ ...options, fetch: broken(status) }, { call: "install", version: "0.2.1" });
+    expect(await ask(202)).toMatchObject({ status: 202, body: { reachable: true, error: null } });
+    expect(await ask(503)).toMatchObject({
+      status: 503,
+      body: { error: "The update service refused (HTTP 503)." },
+    });
+    expect((await ask(401)).body.error).toMatch(/needs a token/);
+  });
+
   it("refuses an answer that is not a status", async () => {
     updater.respond(() => ({ body: { mode: "everything" } }));
     expect(await askUpdater(options, { call: "status" })).toMatchObject({
@@ -220,6 +264,22 @@ describe("the token", () => {
     });
   });
 
+  it("is what the fake updater reports as apiToken by default", async () => {
+    const open = await startFakeUpdater();
+    try {
+      expect(
+        (await askUpdater({ url: open.url, appVersion: null }, { call: "status" })).body.updater?.apiToken,
+      ).toBe(false);
+      const guardedStatus = await askUpdater(
+        { url: guarded.url, token: "updater-token-0123456789", appVersion: null },
+        { call: "status" },
+      );
+      expect(guardedStatus.body.updater?.apiToken).toBe(true);
+    } finally {
+      await open.close();
+    }
+  });
+
   it("is asked for when the app has none and the updater needs one", async () => {
     for (const token of [undefined, null, ""]) {
       const answer = await askUpdater({ url: guarded.url, token, appVersion: "0.2.0" }, { call: "check" });
@@ -231,29 +291,46 @@ describe("the token", () => {
   });
 });
 
-describe("updaterRequest", () => {
-  it("takes only versions and channels the contract allows", () => {
-    expect(updaterRequest("status", undefined)).toEqual({ request: { call: "status" } });
-    expect(updaterRequest("check", { anything: true })).toEqual({ request: { call: "check" } });
+describe("the route bodies", () => {
+  it("takes only versions and channels the contract allows", async () => {
+    updater.respond(() => ({ body: updaterStatus() }));
     for (const version of ["0.2.1", "10.0.0-preview.12", "sha256:0123456789ab"]) {
-      expect(updaterRequest("install", { version })).toEqual({ request: { call: "install", version } });
+      expect((await answerTo("install", JSON.stringify({ version }))).status).toBe(200);
+      expect(updater.calls.at(-1)?.body).toEqual({ version });
     }
     for (const body of [
       null,
-      {},
-      { version: "latest" },
-      { version: "0.2" },
-      { version: "0.2.1\n" },
-      { version: 1 },
+      "{}",
+      '{"version":"latest"}',
+      '{"version":"0.2"}',
+      '{"version":"0.2.1\\n"}',
+      '{"version":1}',
     ]) {
-      expect(updaterRequest("install", body)).toHaveProperty("error");
+      expect(await answerTo("install", body)).toEqual({
+        status: 400,
+        body: { error: 'Send {"version": "X.Y.Z"} with a version the updater offers.' },
+      });
     }
-    expect(updaterRequest("channel", { channel: "preview" })).toEqual({
-      request: { call: "channel", channel: "preview" },
-    });
-    for (const body of [null, { channel: "beta" }, { channel: ["stable"] }]) {
-      expect(updaterRequest("channel", body)).toHaveProperty("error");
+    expect((await answerTo("channel", '{"channel":"preview"}')).status).toBe(200);
+    for (const body of [null, '{"channel":"beta"}', '{"channel":["stable"]}']) {
+      expect((await answerTo("channel", body)).status).toBe(400);
     }
+    expect((await answerTo("check", '{"anything":true}')).status).toBe(200);
+    expect(updater.calls.map((call) => call.path)).toEqual([
+      "/v1/install",
+      "/v1/install",
+      "/v1/install",
+      "/v1/channel",
+      "/v1/check",
+    ]);
+  });
+
+  it("refuses a body it cannot read with 400", async () => {
+    const used = new Request("http://app.test/", { method: "POST", body: '{"version":"0.2.1"}' });
+    await used.text();
+    const response = await createUpdatesHandler(options).respond("install", used);
+    expect(response.status).toBe(400);
+    expect(updater.calls).toEqual([]);
   });
 });
 
@@ -290,7 +367,7 @@ describe("createUpdatesHandler", () => {
 
   it("refuses a wrong body with 400 and calls nothing", async () => {
     const updates = createUpdatesHandler(options);
-    for (const body of ["", "not json", '{"version":"latest"}', `{"version":"${"1".repeat(5000)}"}`]) {
+    for (const body of ["", "not json", '{"version":"latest"}']) {
       const response = await updates.respond("install", post(body));
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual({

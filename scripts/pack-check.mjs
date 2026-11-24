@@ -19,6 +19,7 @@ const required = [
   "dist/updates/server.js",
   "dist/updates/server.d.ts",
   "dist/updates/testing.js",
+  "dist/updates/testing.d.ts",
   "dist/standalone/meldgrove-updates.js",
   "dist/standalone/meldgrove-secret-input.js",
 ];

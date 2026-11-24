@@ -360,8 +360,6 @@ export async function POST(request: Request) {
 - `respond` checks the body (`{"version"}` of the contract's pattern,
   `{"channel": "stable" | "preview"}`) and answers 400 otherwise. Answers
   are never cached (`Cache-Control: no-store`).
-- `answer(action, body)` gives the status code and body as data, for apps
-  that build the response themselves.
 - The updater answers 401 when its `API_TOKEN` is set and the app sends
   none or another token; the error names `UPDATER_TOKEN`.
 - `@meldgrove/ui/updates/testing` has `startFakeUpdater({ token? })`, an
